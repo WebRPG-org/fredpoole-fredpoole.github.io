@@ -14,31 +14,65 @@ import html
 import json
 import os
 import re
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 PRONOUN_COLS = ["i", "me", "my", "you", "he", "she", "they", "them", "his", "hers", "theirs"]
 QUESTION_COLS = ["who", "what", "why", "where", "when", "how"]
+# Each marker also counts its Chinese equivalents; keep in step with STYLE_MARKERS in index.html.
 STYLE_MARKERS = [
-    r"\?",
-    r"!",
-    r"\b(maybe|perhaps|probably|might|i think|i guess|i suppose|sort of|kind of)\b",
-    r"\b(sorry|apologi[sz]e\w*|apologies|forgive me|my fault)\b",
-    r"\b(please|thank|thanks)\b",
-    r"\b(really|very|so much|totally|absolutely|extremely)\b",
-    r"\b(damn\w*|hell|shit\w*|bastard\w*|crap|bloody|fuck\w*|dammit|piss\w*)\b",
-    r"(^|[.!?\n]\s*)(go|come|look|stop|listen|wait|get|give|tell|leave|take|move|hurry|run)\b",
+    r"[?？]",
+    r"[!！]",
+    r"\b(maybe|perhaps|probably|might|i think|i guess|i suppose|sort of|kind of)\b|也许|或许|大概|可能|我觉得|我想|似乎|好像|恐怕",
+    r"\b(sorry|apologi[sz]e\w*|apologies|forgive me|my fault)\b|对不起|抱歉|不好意思|恕罪|见谅|失礼|得罪",
+    r"\b(please|thank|thanks)\b|请|谢谢|多谢|有劳|劳驾",
+    r"\b(really|very|so much|totally|absolutely|extremely)\b|非常|十分|很|太|极其|特别|实在",
+    r"\b(damn\w*|hell|shit\w*|bastard\w*|crap|bloody|fuck\w*|dammit|piss\w*)\b|混蛋|该死|他妈|他娘的|畜生|混账|王八|狗东西|贱人",
+    r"(^|[.!?\n]\s*)(go|come|look|stop|listen|wait|get|give|tell|leave|take|move|hurry|run)\b|(^|[。！？\n])\s*(快|走|来|看|听|等等|别|住手|站住|滚|闭嘴)",
 ]
 STYLE_RES = [re.compile(p, re.M) for p in STYLE_MARKERS]
 TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z]+)*")
+CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+# Chinese words counted in the English pronoun and question-word columns.
+ZH_WORDS = {"i": ["我", "吾", "俺", "在下"], "you": ["你", "您", "汝"], "he": ["他"], "she": ["她"], "they": ["他们", "她们"],
+            "who": ["谁"], "what": ["什么", "何"], "why": ["为什么", "为何"], "where": ["哪里", "哪儿", "何处"],
+            "when": ["何时"], "how": ["怎么", "如何", "怎样"]}
+ZH_TOKENS = {}
+
+
+def norm(t):
+    return t.lower().replace("’", "'").replace("‘", "'")
+
+
+def segment_zh(texts):
+    """Split Chinese lines into words with Intl.Segmenter (via Node), the same splitter the explorer uses in the browser."""
+    todo = [t for t in dict.fromkeys(map(norm, texts)) if t not in ZH_TOKENS and CJK_RE.search(t)]
+    if not todo:
+        return
+    js = ("let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const s=new Intl.Segmenter('zh',{granularity:'word'});"
+          "process.stdout.write(JSON.stringify(JSON.parse(d).map(t=>[...s.segment(t)].filter(x=>x.isWordLike).map(x=>x.segment))))})")
+    out = subprocess.run(["node", "-e", js], input=json.dumps(todo), capture_output=True, text=True, check=True).stdout
+    ZH_TOKENS.update(zip(todo, json.loads(out)))
 
 
 def tokenize(t):
-    return TOKEN_RE.findall(t.lower().replace("’", "'").replace("‘", "'"))
+    t = norm(t)
+    if CJK_RE.search(t):
+        if t not in ZH_TOKENS:
+            segment_zh([t])
+        return ZH_TOKENS[t]
+    return TOKEN_RE.findall(t)
+
+
+def colcount(kw, w):
+    return kw.get(w, 0) + sum(kw.get(z, 0) for z in ZH_WORDS.get(w, []))
 
 
 def syllables(w):
+    if CJK_RE.search(w):
+        return len(CJK_RE.findall(w))  # one syllable per character
     w = re.sub(r"[^a-z]", "", w)
     if not w:
         return 0
@@ -74,7 +108,7 @@ def build_record(game_id, meta, lines, tags):
             continue
         a["lines"] += 1
         a["words"] += len(toks)
-        a["sent"] += max(1, len(re.findall(r"[.!?]+(?=\s|$)", text)))
+        a["sent"] += max(1, len(re.findall(r"[.!?]+(?=\s|$)|[。！？]+", text)))
         a["syl"] += sum(syllables(w) for w in toks)
         for w in toks:
             a["kw"][w] = a["kw"].get(w, 0) + 1
@@ -93,8 +127,8 @@ def build_record(game_id, meta, lines, tags):
         chars.append({
             "n": n, "g": gender, "grp": [group] if group else [],
             "s": [a["lines"], a["words"], a["sent"], a["syl"]],
-            "pr": [a["kw"].get(w, 0) for w in PRONOUN_COLS],
-            "qw": [a["kw"].get(w, 0) for w in QUESTION_COLS],
+            "pr": [colcount(a["kw"], w) for w in PRONOUN_COLS],
+            "qw": [colcount(a["kw"], w) for w in QUESTION_COLS],
             "st": [len(r.findall(text)) for r in STYLE_RES],
             "kw": kw,
         })
@@ -306,7 +340,138 @@ def cyberpunk_2077(path):
     return build_record("extra/Cyberpunk2077", meta, lines, read_tags("cyberpunk-2077"))
 
 
-BUILDERS = {"disco": disco_elysium, "gtav": gta_v, "genshin": genshin_impact, "rdr2": rdr2, "cp77": cyberpunk_2077}
+def wiki_templates(text, name):
+    """Bodies of every {{name|...}} template in wikitext, with nested templates left inside."""
+    out, i, key = [], 0, "{{" + name + "|"
+    while (i := text.find(key, i)) >= 0:
+        j, depth = i + 2, 1
+        while j < len(text) and depth:
+            if text.startswith("{{", j):
+                depth, j = depth + 1, j + 2
+            elif text.startswith("}}", j):
+                depth, j = depth - 1, j + 2
+            else:
+                j += 1
+        out.append(text[i + len(key):j - 2])
+        i = j
+    return out
+
+
+def wiki_params(body):
+    """Split a template body on its top-level | characters."""
+    parts, depth, cur = [], 0, ""
+    for k, ch in enumerate(body):
+        if body.startswith("{{", k) or body.startswith("[[", k):
+            depth += 1
+        elif body.startswith("}}", k) or body.startswith("]]", k):
+            depth -= 1
+        if ch == "|" and depth == 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    return parts + [cur]
+
+
+def wiki_plain(t):
+    t = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", "", t, flags=re.S)
+    t = re.sub(r"<br\s*/?>", " ", t)
+    t = re.sub(r"<[^>]+>", "", t)
+    prev = None
+    while prev != t:
+        prev = t
+        # {{称呼差分|x}} is how NPCs address the player; the wiki gives the male-player form, or nothing.
+        t = re.sub(r"\{\{([^{}|]+)(?:\|([^{}]*))?\}\}",
+                   lambda m: (m.group(2) or "").split("|")[0] if m.group(2) else ("少侠" if m.group(1).strip() == "称呼差分" else ""), t)
+    t = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", t).replace("'''", "").replace("''", "")
+    return strip(t)
+
+
+WWM_UNKNOWN = {"？", "？？？", "?", "???", "说话人待核"}
+# Gender carried by a title or kinship term at the end (or start) of a speaker's name.
+WWM_TITLE_GENDER = [
+    ("Female", ("少女", "姑娘", "娘子", "夫人", "小姐", "媳妇", "奶奶", "婆婆", "姐姐", "妹妹", "丫头", "婶", "婆", "姑", "娘", "姐", "妹", "嫂", "妈", "姨", "妃", "女"), ("女",)),
+    ("Male", ("公子", "少爷", "老爷", "和尚", "小子", "大叔", "老头", "大哥", "哥", "兄", "弟", "叔", "伯", "爷", "爹", "汉", "郎", "公", "翁"), ("男",)),
+]
+
+
+def where_winds_meet(path):
+    """燕云十六声 Huiji wiki archive (pages.json from anonymous99-Rise/yanyun-guide): {{对话|speaker|line}} templates."""
+    with open(path, encoding="utf-8") as f:
+        pages = json.load(f)["pages"]
+    lines, wiki_gender = [], {}
+    for p in pages:
+        w = p.get("wikitext") or ""
+        m = re.search(r"\|\s*性别\s*=\s*([男女公母])", w)
+        if m:
+            wiki_gender[p["title"]] = m.group(1)
+        for body in wiki_templates(w, "对话"):
+            parts = wiki_params(body)
+            if len(parts) < 2:
+                continue
+            spk, text = wiki_plain(parts[0]), wiki_plain(parts[1])
+            if not spk or not text:
+                continue
+            lines.append(("Unknown speaker" if spk in WWM_UNKNOWN else spk, text))
+    segment_zh([t for _, t in lines])
+
+    # Tags: start from ready-made/where-winds-meet-tags.csv (hand edits win), then fill gaps from the wiki.
+    tag_path = os.path.join(HERE, "ready-made", "where-winds-meet-tags.csv")
+    tags = read_tags("where-winds-meet") if os.path.exists(tag_path) else {}
+    counts = {}
+    for spk, _ in lines:
+        counts[spk] = counts.get(spk, 0) + 1
+    for spk, n in sorted(counts.items(), key=lambda x: -x[1]):
+        if spk in tags:
+            continue
+        row = {"speaker": spk, "gender": "", "player_character": "", "group": ""}
+        if spk == "少东家":
+            row.update(gender="Neutral", player_character="yes", group="player character (gender chosen by player)")
+        elif spk in wiki_gender:
+            g = wiki_gender[spk]
+            row.update(gender={"男": "Male", "女": "Female", "公": "Male", "母": "Female"}[g],
+                       group="gender from wiki character page" + (" (animal)" if g in "公母" else ""))
+        else:
+            for gender, ends, starts in WWM_TITLE_GENDER:
+                hit = next((e for e in ends if spk.endswith(e)), None) or next((s for s in starts if spk.startswith(s)), None)
+                if hit:
+                    row.update(gender=gender, group=f"gender from title in name ({hit or spk})")
+                    break
+        if row["gender"] or n >= 30:
+            tags[spk] = row  # untagged speakers with 30+ lines are listed so they can be filled in by hand
+    with open(tag_path, "w", newline="", encoding="utf-8") as f:
+        wr = csv.DictWriter(f, fieldnames=["speaker", "gender", "player_character", "group"])
+        wr.writeheader()
+        for spk in sorted(tags, key=lambda s: -counts.get(s, 0)):
+            wr.writerow({k: tags[spk].get(k, "") for k in wr.fieldnames})
+    tags = {k: v for k, v in tags.items() if v.get("gender")}
+
+    meta = {
+        "title": "Where Winds Meet (燕云十六声)",
+        "series": "Where Winds Meet",
+        "year": 2024,
+        "source": "https://raw.githubusercontent.com/anonymous99-Rise/yanyun-guide/main/content/huiji/pages.json",
+        "sourceType": "fan wiki transcript",
+        "completeness": "partial",
+        "choices": "partial",
+        "lang": "zh",
+        "custom": {
+            "where": "ready",
+            "notes": "Chinese text. Quest dialogue transcribed by players on the 燕云十六声 Huiji wiki (yy16s.huijiwiki.com), "
+                     "from a GitHub archive of the wiki made in October 2026. Words are split with the browser's Chinese word "
+                     "splitter, so counts are of words, not characters, and \"syllables per word\" means characters per word. "
+                     "The player character 少东家 is tagged Neutral. Other genders come from the wiki's character pages or from a "
+                     "title in the speaker's name (婶 aunt, 大哥 elder brother, 姑娘 young woman); everyone else is untagged (Other). "
+                     "Where NPCs address the player differently by the player's gender, the wiki gives the male-player form "
+                     "(师弟, 大哥哥, 郎君). Conversations with the AI-chat NPCs are not scripted and are not included.",
+            "rights": "Dialogue by Everstone Studio / NetEase. Transcriptions from the 燕云十六声 Huiji wiki (CC BY-NC-SA). Only word counts are stored here.",
+            "importOpts": {"format": "json"},
+        },
+    }
+    return build_record("extra/WhereWindsMeet", meta, lines, tags)
+
+
+BUILDERS = {"disco": disco_elysium, "gtav": gta_v, "genshin": genshin_impact, "rdr2": rdr2, "cp77": cyberpunk_2077, "wwm": where_winds_meet}
 
 
 def main(args):

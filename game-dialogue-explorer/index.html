@@ -341,16 +341,21 @@ const PRONOUN_SETS = [
   ["they / them / theirs", ["they", "them", "theirs"]],
 ];
 const STYLE_MARKERS = [
-  ["Questions (?)", "Question marks per 1,000 words", t => count(t, /\?/g)],
-  ["Exclamations (!)", "Exclamation marks per 1,000 words", t => count(t, /!/g)],
-  ["Hedges", "maybe, perhaps, probably, I think, I guess, I suppose, sort of, kind of, might", t => count(t, /\b(maybe|perhaps|probably|might|i think|i guess|i suppose|sort of|kind of)\b/g)],
-  ["Apologies", "sorry, apologize, apologies, forgive me, my fault", t => count(t, /\b(sorry|apologi[sz]e\w*|apologies|forgive me|my fault)\b/g)],
-  ["Politeness", "please, thank you, thanks", t => count(t, /\b(please|thank|thanks)\b/g)],
-  ["Intensifiers", "really, very, so much, totally, absolutely, extremely", t => count(t, /\b(really|very|so much|totally|absolutely|extremely)\b/g)],
-  ["Swearing", "damn, hell, shit, bastard, crap, bloody, fuck…", t => count(t, /\b(damn\w*|hell|shit\w*|bastard\w*|crap|bloody|fuck\w*|dammit|piss\w*)\b/g)],
-  ["Commands", "Lines that start with a bare verb such as go, come, look, stop, listen, wait, get, give, tell", t => count(t, /(^|[.!?\n]\s*)(go|come|look|stop|listen|wait|get|give|tell|leave|take|move|hurry|run)\b/g)],
+  ["Questions (?)", "Question marks per 1,000 words", t => count(t, /[?？]/g)],
+  ["Exclamations (!)", "Exclamation marks per 1,000 words", t => count(t, /[!！]/g)],
+  ["Hedges", "maybe, perhaps, probably, I think, I guess, I suppose, sort of, kind of, might · 也许 或许 大概 可能 我觉得 我想 似乎 好像 恐怕", t => count(t, /\b(maybe|perhaps|probably|might|i think|i guess|i suppose|sort of|kind of)\b|也许|或许|大概|可能|我觉得|我想|似乎|好像|恐怕/g)],
+  ["Apologies", "sorry, apologize, apologies, forgive me, my fault · 对不起 抱歉 不好意思 恕罪 见谅 失礼 得罪", t => count(t, /\b(sorry|apologi[sz]e\w*|apologies|forgive me|my fault)\b|对不起|抱歉|不好意思|恕罪|见谅|失礼|得罪/g)],
+  ["Politeness", "please, thank you, thanks · 请 谢谢 多谢 有劳 劳驾", t => count(t, /\b(please|thank|thanks)\b|请|谢谢|多谢|有劳|劳驾/g)],
+  ["Intensifiers", "really, very, so much, totally, absolutely, extremely · 非常 十分 很 太 极其 特别 实在", t => count(t, /\b(really|very|so much|totally|absolutely|extremely)\b|非常|十分|很|太|极其|特别|实在/g)],
+  ["Swearing", "damn, hell, shit, bastard, crap, bloody, fuck… · 混蛋 该死 他妈 畜生 混账 王八…", t => count(t, /\b(damn\w*|hell|shit\w*|bastard\w*|crap|bloody|fuck\w*|dammit|piss\w*)\b|混蛋|该死|他妈|他娘的|畜生|混账|王八|狗东西|贱人/g)],
+  ["Commands", "Lines that start with a bare verb such as go, come, look, stop, listen, wait, get, give, tell · 快 走 来 看 听 等等 别 住手 站住 滚 闭嘴", t => count(t, /(^|[.!?\n]\s*)(go|come|look|stop|listen|wait|get|give|tell|leave|take|move|hurry|run)\b|(^|[。！？\n])\s*(快|走|来|看|听|等等|别|住手|站住|滚|闭嘴)/g)],
 ];
-const STOP = new Set(("a about above after again against all am an and any are as at be because been before being below between both but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just let me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves i'm it's don't that's you're i'll can't i've we're what's there's he's she's let's didn't won't isn't we'll they're you'll doesn't wasn't i'd ain't oh yeah yes ok okay hey uh um ah well just got get go going come know right like").split(" "));
+// Chinese words counted in the English pronoun and question-word columns (same lists as build_ready_made.py).
+const ZH_WORDS = { i: ["我", "吾", "俺", "在下"], you: ["你", "您", "汝"], he: ["他"], she: ["她"], they: ["他们", "她们"],
+  who: ["谁"], what: ["什么", "何"], why: ["为什么", "为何"], where: ["哪里", "哪儿", "何处"], when: ["何时"], how: ["怎么", "如何", "怎样"] };
+const ZH_LABELS = { "I / me / my": "我", "you": "你 您", "he / his": "他", "she / hers": "她", "they / them / theirs": "他们 她们" };
+const CJK = /[\u3400-\u9fff\uf900-\ufaff]/;
+const STOP = new Set(("a about above after again against all am an and any are as at be because been before being below between both but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just let me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves i'm it's don't that's you're i'll can't i've we're what's there's he's she's let's didn't won't isn't we'll they're you'll doesn't wasn't i'd ain't oh yeah yes ok okay hey uh um ah well just got get go going come know right like 的 了 是 我 你 他 她 它 们 我们 你们 他们 这 那 这个 那个 在 有 也 就 都 不 没 没有 吗 呢 吧 啊 呀 么 和 与 一 个 着 过 把 被 给 要 会 能 说 还 又 很 去 来 上 下 里 到 让 对 自己 什么 怎么 之 其 而 以 于 此 乃 便 已 哦 嗯 哈 罢 您 那么 这么 便是 就是 不是 可是 但 却 若 如 中 为").split(" "));
 const SAMPLE_SCRIPT = `Example transcript (made up, for trying the importer)
 [A rain-soaked dock at night]
 CAPTAIN ROSA: Lines secure? We sail at first light.
@@ -469,8 +474,28 @@ function keyness(aCounts, aTotal, bCounts, bTotal, minFreq, hideStop) {
 }
 
 // ---------- text processing shared by the importer and the full-script tab ----------
-function tokenize(t) { return t.toLowerCase().replace(/[’‘]/g, "'").match(/[a-z0-9]+(?:'[a-z]+)*/g) || []; }
+let zhSeg = null;
+function tokenize(t) {
+  t = t.toLowerCase().replace(/[’‘]/g, "'");
+  if (CJK.test(t) && window.Intl && Intl.Segmenter) {
+    // Chinese has no spaces between words: split it with the browser's word splitter, as build_ready_made.py does.
+    zhSeg = zhSeg || new Intl.Segmenter("zh", { granularity: "word" });
+    const out = [];
+    for (const x of zhSeg.segment(t)) if (x.isWordLike) out.push(x.segment);
+    return out;
+  }
+  return t.match(/[a-z0-9]+(?:'[a-z]+)*/g) || [];
+}
+function zhCount(kw, w) { return (kw[w] || 0) + (ZH_WORDS[w] || []).reduce((s, z) => s + (kw[z] || 0), 0); }
+function prLabel(label) { return game().lang === "zh" && ZH_LABELS[label] ? `${label} · ${ZH_LABELS[label]}` : label; }
+// A regex source for a search phrase; word boundaries only make sense next to Latin letters and digits.
+function phraseSource(q) {
+  const pat = q.toLowerCase().replace(/[’‘]/g, "'").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const edge = c => /[a-z0-9']/.test(c) ? "\\b" : "";
+  return { pat, src: edge(q.trim().slice(0, 1).toLowerCase()) + pat + edge(q.trim().slice(-1).toLowerCase()) };
+}
 function syllables(w) {
+  if (CJK.test(w)) return (w.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
   w = w.replace(/[^a-z]/g, "");
   if (!w) return 0;
   if (w.length <= 3) return 1;
@@ -520,6 +545,7 @@ function parseInput(text, fileName, opts) {
   if (format === "json") {
     const json = JSON.parse(text);
     if (json && json.format === "gde-game") return { format: "gde", record: json.record, lines: [] };
+    if (json && Array.isArray(json.pages) && json.pages.length && "wikitext" in json.pages[0]) return { format: "json", lines: wikiDialogue(json.pages, strip) };
     if (Array.isArray(json) && json.length && typeof json[0] === "object" && !Array.isArray(json[0]) && !EXCLUDE_KEYS.has(Object.keys(json[0])[0]) && Object.keys(json[0]).length > 1) {
       // A list of row objects, e.g. a datamine export: treat like a table.
       const headers = [...new Set(json.slice(0, 200).flatMap(r => Object.keys(r || {})))];
@@ -563,6 +589,44 @@ function parseInput(text, fileName, opts) {
     }
   });
   return { format: "colon", lines };
+}
+// Huiji wiki archive (e.g. 燕云十六声): every {{对话|speaker|line}} template, as build_ready_made.py reads it.
+const WIKI_UNKNOWN = new Set(["？", "？？？", "?", "???", "说话人待核"]);
+function wikiDialogue(pages, strip) {
+  const params = body => {
+    const parts = []; let depth = 0, cur = "";
+    for (let k = 0; k < body.length; k++) {
+      const two = body.slice(k, k + 2);
+      if (two === "{{" || two === "[[") depth++; else if (two === "}}" || two === "]]") depth--;
+      if (body[k] === "|" && depth === 0) { parts.push(cur); cur = ""; } else cur += body[k];
+    }
+    return [...parts, cur];
+  };
+  const plain = t => {
+    t = t.replace(/<ref[^>]*\/>|<ref[^>]*>[\s\S]*?<\/ref>/g, "").replace(/<br\s*\/?>/g, " ").replace(/<[^>]+>/g, "");
+    for (let prev = null; prev !== t;) {
+      prev = t;
+      // {{称呼差分|x}} is how NPCs address the player; the wiki gives the male-player form, or nothing.
+      t = t.replace(/\{\{([^{}|]+)(?:\|([^{}]*))?\}\}/g, (m, name, args) => args ? args.split("|")[0] : name.trim() === "称呼差分" ? "少侠" : "");
+    }
+    return strip(t.replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, "$1").replace(/'''|''/g, ""));
+  };
+  const lines = [], key = "{{对话|";
+  pages.forEach(p => {
+    const w = (p && p.wikitext) || "";
+    for (let i = w.indexOf(key); i >= 0; i = w.indexOf(key, i)) {
+      let j = i + 2, depth = 1;
+      while (j < w.length && depth) {
+        if (w.startsWith("{{", j)) { depth++; j += 2; } else if (w.startsWith("}}", j)) { depth--; j += 2; } else j++;
+      }
+      const parts = params(w.slice(i + key.length, j - 2));
+      i = j;
+      if (parts.length < 2) continue;
+      const spk = plain(parts[0]), text = plain(parts[1]);
+      if (spk && text) lines.push([WIKI_UNKNOWN.has(spk) ? "Unknown speaker" : spk, text]);
+    }
+  });
+  return lines;
 }
 function tableLines(headers, rows, o, strip, format) {
   let spkCol = o.spkCol >= 0 ? o.spkCol : guessCol(headers, ["speaker", "character", "actor", "name", "talker", "talkrole", "role", "who"]);
@@ -959,7 +1023,7 @@ function renderDetail() {
     const max = Math.max(...mine, ...gameRates.filter(Number.isFinite), 1);
     pronHTML = `<div class="section"><h3>Pronoun use per 1,000 words</h3>
       <div class="bars">${PRONOUN_SETS.map(([label], i) => `
-        <div class="bar-row"><span class="name">${label}</span>
+        <div class="bar-row"><span class="name">${prLabel(label)}</span>
           <span class="track" style="display:grid;gap:2px;height:auto;background:none">
             <span class="fill" style="display:block;height:9px;width:${mine[i] / max * 100}%;background:${gcol(c.g)}"></span>
             <span class="fill" style="display:block;height:5px;width:${(gameRates[i] || 0) / max * 100}%;background:var(--line)"></span></span>
@@ -1090,7 +1154,7 @@ function renderLanguage() {
       : "These counts come from the corpus authors' precomputed tables. They count a fixed set of words: 11 pronouns, 6 question words, and 200 keywords that most separate male and female speech across the whole corpus. Rates are per 1,000 words so groups of different size can be compared."}</p>
     <div class="section">
       <div class="section-head"><h3>Pronouns by gender</h3><span class="note">per 1,000 words</span></div>
-      ${heatTable(PRONOUN_SETS.map(p => [p[0]]), gRows.map(r => ({ label: r.label, gender: r.gender, vals: r.pr })), 1)}
+      ${heatTable(PRONOUN_SETS.map(p => [prLabel(p[0])]), gRows.map(r => ({ label: r.label, gender: r.gender, vals: r.pr })), 1)}
       <p class="note">Talking about yourself (I/me/my), addressing others (you), or talking about third parties (he/she/they) can point to who drives the conversation and who gets talked about.</p>
     </div>
     <div class="section">
@@ -1105,7 +1169,7 @@ function renderLanguage() {
       <div class="section-head"><h3>Characters side by side</h3>
         <button class="btn small" id="copyCmp">Copy as CSV</button></div>
       <p class="note">${auto ? `Showing the ${picked.length} biggest speakers with at least ${state.minWords} words. Tick "Compare" on the Characters tab to choose your own.` : `Showing the ${picked.length} characters you picked on the Characters tab.`}</p>
-      ${cRows.length ? heatTable([...PRONOUN_SETS.map(p => [p[0], "per 1,000 words"]), ["questions", "who/what/why/where/when/how per 1,000 words"], ["words / line"], ["words / sentence"]], cRows, 1) : '<div class="empty">No characters match. Lower the minimum words setting or change the gender filter.</div>'}
+      ${cRows.length ? heatTable([...PRONOUN_SETS.map(p => [prLabel(p[0]), "per 1,000 words"]), ["questions", "who/what/why/where/when/how per 1,000 words"], ["words / line"], ["words / sentence"]], cRows, 1) : '<div class="empty">No characters match. Lower the minimum words setting or change the gender filter.</div>'}
       ${stRows.length ? heatTable(STYLE_MARKERS.map(m => [m[0], m[1]]), stRows, 1) : ""}
     </div>
     <div class="section">
@@ -1195,19 +1259,19 @@ function talkStats(sc) {
   });
   const sents = [];
   sc.all.forEach(([spk, text], i) => {
-    (text.match(/[^.!?…]+(?:[.!?…]+["'”’)]*|$)/g) || []).forEach(s => {
+    (text.match(/[^.!?…。！？]+(?:[.!?…。！？]+["'”’)」』]*|$)/g) || []).forEach(s => {
       const shown = s.trim();
       const key = shown.toLowerCase().replace(/[’‘]/g, "'").replace(/[^\p{L}\p{N}' ]+/gu, " ").replace(/\s+/g, " ").trim();
-      if (key) sents.push({ key, shown, spk, to: to[i], words: key.split(" ").length });
+      if (key) sents.push({ key, shown, spk, to: to[i], words: tokenize(key).length });
     });
   });
   return (sc.talk = { to, pairs, partners, sents });
 }
 // Lines by the given speakers that contain a word or phrase, spread across the script.
 function examplesHTML(sc, names, q, max, label) {
-  const pat = q.toLowerCase().replace(/[’‘]/g, "'").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-  if (!pat) return "";
-  const re = new RegExp(`\\b${pat}\\b`, "i"), hl = new RegExp(`\\b(${pat.replace(/'/g, "(?:'|&#39;)")})\\b`, "gi");
+  if (!q) return "";
+  const { src } = phraseSource(q);
+  const re = new RegExp(src, "i"), hl = new RegExp(`(${src.replace(/'/g, "(?:'|&#39;)")})`, "gi");
   const who = new Set(names), hits = sc.all.filter(([n, t]) => who.has(n) && re.test(t.replace(/[’‘]/g, "'")));
   if (!hits.length) return `<div class="empty">${esc(label)} never says "${esc(q)}".</div>`;
   const shown = hits.length <= max ? hits : Array.from({ length: max }, (_, i) => hits[Math.floor((i + .5) * hits.length / max)]);
@@ -1415,8 +1479,8 @@ python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
     const q = pane.querySelector("#q").value.trim(); state.search = q;
     const out = document.getElementById("qOut");
     if (!q) { out.innerHTML = ""; return; }
-    const pat = q.toLowerCase().replace(/[’‘]/g, "'").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-    const re = new RegExp(`\\b${pat}\\b`, "gi");
+    const { src } = phraseSource(q);
+    const re = new RegExp(src, "gi");
     const per = entries.map(([n, v]) => ({ n, g: v.g, hits: count(v.text.replace(/[’‘]/g, "'"), re), words: v.words })).filter(x => x.words);
     const byG = groups.map(x => { const m = per.filter(p => p.g === x); const h = m.reduce((s, p) => s + p.hits, 0), w = m.reduce((s, p) => s + p.words, 0); return { g: x, h, rate: w ? h / w * 10000 : 0 }; });
     const maxR = Math.max(...byG.map(x => x.rate), 1e-9);
@@ -1430,7 +1494,7 @@ python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
       re.lastIndex = 0;
       if (re.test(text.replace(/[’‘]/g, "'"))) conc.push([spk, v.g, text]);
     }
-    const hl = t => esc(t.replace(/[’‘]/g, "'")).replace(new RegExp(`\\b(${pat.replace(/'/g, "(?:'|&#39;)")})\\b`, "gi"), "<mark>$1</mark>");
+    const hl = t => esc(t.replace(/[’‘]/g, "'")).replace(new RegExp(`(${src.replace(/'/g, "(?:'|&#39;)")})`, "gi"), "<mark>$1</mark>");
     out.innerHTML = !hitsTotal ? `<div class="empty">"${esc(q)}" does not appear in the dialogue of the characters shown.</div>` : `
       <div class="two">
         <div class="section"><h3>Uses per 10,000 words</h3><div class="bars">${byG.map(x => `<div class="bar-row"><span class="name">${sw(x.g)} ${x.g}</span><span class="track"><span class="fill" style="display:block;width:${x.rate / maxR * 100}%;background:${gcol(x.g)}"></span></span><span class="val">${fmt(x.rate, 1)} (${x.h})</span></div>`).join("")}</div></div>
@@ -1578,7 +1642,7 @@ function buildRecord() {
     if (!n) return;
     const a = acc[n] || (acc[n] = { lines: 0, words: 0, sent: 0, syl: 0, kw: {}, text: [] });
     const toks = tokenize(t);
-    a.lines++; a.words += toks.length; a.sent += Math.max(1, count(t, /[.!?]+(?=\s|$)/g)); a.syl += toks.reduce((s, w) => s + syllables(w), 0);
+    a.lines++; a.words += toks.length; a.sent += Math.max(1, count(t, /[.!?]+(?=\s|$)|[。！？]+/g)); a.syl += toks.reduce((s, w) => s + syllables(w), 0);
     toks.forEach(w => { a.kw[w] = (a.kw[w] || 0) + 1; });
     a.text.push(t.toLowerCase());
   });
@@ -1592,7 +1656,7 @@ function buildRecord() {
     return {
       n, g: info[n].gender || "Other", grp: info[n].gender ? [] : ["not coded"],
       s: [a.lines, a.words, a.sent, a.syl],
-      pr: pcols.map(w => a.kw[w] || 0), qw: qcols.map(w => a.kw[w] || 0),
+      pr: pcols.map(w => zhCount(a.kw, w)), qw: qcols.map(w => zhCount(a.kw, w)),
       st: STYLE_MARKERS.map(m => m[2](text)),
       kw: Object.fromEntries(top),
     };
@@ -1602,6 +1666,7 @@ function buildRecord() {
   return finishRecord({
     id: "local:" + gid, title: m.title.trim(), series: m.series.trim() || m.title.trim(), year: +m.year || null,
     source: m.source.trim(), sourceType: m.sourceType, completeness: m.completeness, choices: "",
+    lang: imp.parsed.lines.filter(([, t]) => CJK.test(t)).length > imp.parsed.lines.length / 2 ? "zh" : undefined,
     pcs: Object.entries(info).filter(([, i]) => i.pc).map(([n]) => n), groups: {}, chars,
     custom: { where: "local", gid, addedAt: Date.now(), notes: m.notes.trim(), importOpts: Object.assign({}, imp.opts, { format: imp.parsed.format === "json-table" ? "json" : imp.parsed.format === "table" ? "table" : imp.parsed.format }),
       speakerMap: map, totals: { lines: chars.reduce((s, c) => s + c.s[0], 0), words: chars.reduce((s, c) => s + c.s[1], 0) } },

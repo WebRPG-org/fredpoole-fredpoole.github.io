@@ -2,7 +2,7 @@
 
 A browser tool for studying representation in video game dialogue. Pick a game, filter characters by gender, and compare who talks, how much, and how.
 
-It is built on [The Video Game Dialogue Corpus](https://github.com/seannyD/VideoGameDialogueCorpusPublic) and covers 73 game scripts from it. It also includes ready-made additions that are not in the corpus (Disco Elysium, Genshin Impact, Grand Theft Auto V, Red Dead Redemption 2 and Cyberpunk 2077), and you can add your own game scripts.
+It is built on [The Video Game Dialogue Corpus](https://github.com/seannyD/VideoGameDialogueCorpusPublic) and covers 73 game scripts from it. It also includes ready-made additions that are not in the corpus (Disco Elysium, Genshin Impact, Grand Theft Auto V, Red Dead Redemption 2, Cyberpunk 2077 and Where Winds Meet in Chinese), and you can add your own game scripts.
 
 ## What it does
 
@@ -22,7 +22,7 @@ Everything runs in the browser. Added games keep only word counts and statistics
 | `index.html` | The tool |
 | `corpus-data.js` | Per-character statistics from the corpus, reformatted for the tool |
 | `ready-made-games.js` | Statistics for the ready-made additions (counts only, no dialogue) |
-| `build_ready_made.py`, `ready-made/` | Rebuild the ready-made additions. Each game has a tag file, such as `ready-made/disco-elysium-tags.csv`, that sets each speaker's gender. Edit it, then rerun `build_ready_made.py` with the source files (see the top of the script). Sources: [Disco Elysium export](https://huggingface.co/datasets/allura-org/disco-elysium-conversations-raw), [Genshin Voice](https://huggingface.co/datasets/simon3000/genshin-voice), [Grand Theft Wiki GTA V scripts](https://www.grandtheftwiki.com/Category:Scripts_for_GTA_V), [Game Scripts Wiki RDR2 transcript](https://game-scripts-wiki.blogspot.com/2022/01/red-dead-redemption-2.html), [Game Scripts Wiki Cyberpunk 2077 transcript](https://game-scripts-wiki.blogspot.com/2020/12/cyberpunk-2077-full-transcript.html) |
+| `build_ready_made.py`, `ready-made/` | Rebuild the ready-made additions. Each game has a tag file, such as `ready-made/disco-elysium-tags.csv`, that sets each speaker's gender. Edit it, then rerun `build_ready_made.py` with the source files (see the top of the script). Sources: [Disco Elysium export](https://huggingface.co/datasets/allura-org/disco-elysium-conversations-raw), [Genshin Voice](https://huggingface.co/datasets/simon3000/genshin-voice), [Grand Theft Wiki GTA V scripts](https://www.grandtheftwiki.com/Category:Scripts_for_GTA_V), [Game Scripts Wiki RDR2 transcript](https://game-scripts-wiki.blogspot.com/2022/01/red-dead-redemption-2.html), [Game Scripts Wiki Cyberpunk 2077 transcript](https://game-scripts-wiki.blogspot.com/2020/12/cyberpunk-2077-full-transcript.html), [燕云十六声 Huiji wiki archive](https://github.com/anonymous99-Rise/yanyun-guide) (CC BY-NC-SA; Chinese words are split with Node's `Intl.Segmenter`, so Node is needed) |
 | `build_data.py` | Rebuilds `corpus-data.js` from a copy of the corpus repository: `python3 build_data.py /path/to/VideoGameDialogueCorpusPublic` |
 
 ## Publishing on GitHub Pages

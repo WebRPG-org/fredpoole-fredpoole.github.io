@@ -1,0 +1,1649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Game Dialogue Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: control rail on the left (stacks on phones), tabbed analysis workspace on the right.
+   Gender colours deliberately avoid the pink/blue convention. */
+:root {
+  --bg: #f3f4f7;
+  --panel: #ffffff;
+  --ink: #1b1d26;
+  --muted: #5d6273;
+  --line: #dcdfe7;
+  --accent: #3a37b8;
+  --accent-soft: #e6e5fb;
+  --c-female: #c76a12;
+  --c-male: #157a7a;
+  --c-trans: #8a55c9;
+  --c-neutral: #7d8494;
+  --c-other: #b5b9c4;
+  --warn: #9a5b00;
+  --warn-bg: #fff4e0;
+  --ok: #1d7a3a;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #13141a; --panel: #1c1e27; --ink: #e8e9f0; --muted: #9ba0b2; --line: #2e3140;
+    --accent: #9d9bff; --accent-soft: #2a2950;
+    --c-female: #f0a04b; --c-male: #3fc1bd; --c-trans: #b98cf0; --c-neutral: #9aa1b2; --c-other: #555a69;
+    --warn: #f5c16c; --warn-bg: #33270f; --ok: #6fd08f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #13141a; --panel: #1c1e27; --ink: #e8e9f0; --muted: #9ba0b2; --line: #2e3140;
+  --accent: #9d9bff; --accent-soft: #2a2950;
+  --c-female: #f0a04b; --c-male: #3fc1bd; --c-trans: #b98cf0; --c-neutral: #9aa1b2; --c-other: #555a69;
+  --warn: #f5c16c; --warn-bg: #33270f; --ok: #6fd08f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.9rem; margin: 0; letter-spacing: .02em; }
+h1 .cursor { color: var(--accent); animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { h1 .cursor { animation: none; } }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.25rem; margin: 0; text-wrap: balance; }
+h3 { font-size: .95rem; margin: 0; font-weight: 600; }
+.eyebrow { font-family: var(--font-data); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+a { color: var(--accent); }
+.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Dialogue-box panels: a hard 2px frame with an offset shadow, like an RPG text box. */
+.box { background: var(--panel); border: 2px solid var(--ink); border-radius: 3px; box-shadow: 4px 4px 0 var(--line); padding: 16px; min-width: 0; }
+.rail { display: grid; gap: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 900px) { .rail { position: static; } }
+.field { display: grid; gap: 6px; }
+label.lbl, span.lbl { font-size: .8rem; font-weight: 600; }
+select, input[type="text"], input[type="search"], input[type="number"], input[type="url"], textarea {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 3px; padding: 7px 9px; width: 100%; min-width: 0;
+}
+textarea { font-family: var(--font-data); font-size: .8rem; resize: vertical; }
+select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible, .tab:focus-visible, tr[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line); border-radius: 99px; padding: 3px 10px 3px 6px; font-size: .82rem; cursor: pointer; user-select: none; background: var(--bg); }
+.chip input { margin: 0; accent-color: var(--accent); }
+.chip.off { opacity: .5; }
+.chip .n { font-family: var(--font-data); color: var(--muted); font-size: .75rem; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .82rem; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.note { font-size: .78rem; color: var(--muted); margin: 0; }
+.warnbox { background: var(--warn-bg); color: var(--warn); border-radius: 3px; padding: 8px 10px; font-size: .82rem; }
+.okbox { color: var(--ok); font-size: .85rem; font-weight: 600; }
+
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--ink); }
+.tab { font: inherit; font-weight: 600; font-size: .9rem; background: transparent; color: var(--muted); border: 2px solid transparent; border-bottom: none; padding: 8px 14px; cursor: pointer; border-radius: 3px 3px 0 0; margin-bottom: -2px; }
+.tab[aria-selected="true"] { color: var(--ink); background: var(--panel); border-color: var(--ink); border-bottom: 2px solid var(--panel); }
+.tab.add { color: var(--accent); }
+.tab .badge { font-family: var(--font-data); font-size: .7rem; color: var(--accent); margin-left: 4px; }
+.pane { display: grid; gap: 20px; padding-top: 20px; }
+.section { display: grid; gap: 12px; }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tile { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; }
+.tile .v { font-family: var(--font-display); font-size: 1.7rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .k { font-size: .8rem; color: var(--muted); }
+
+.stack { display: flex; height: 30px; border-radius: 3px; overflow: hidden; border: 1.5px solid var(--ink); }
+.stack span { display: flex; align-items: center; justify-content: center; font-family: var(--font-data); font-size: .72rem; color: #fff; white-space: nowrap; overflow: hidden; min-width: 0; }
+.stack-row { display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 12px; align-items: center; font-size: .85rem; }
+@media (max-width: 520px) { .stack-row { grid-template-columns: minmax(0,1fr); gap: 4px; } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .8rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.bars { display: grid; gap: 4px; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 200px) minmax(0, 1fr) 70px; gap: 10px; align-items: center; font-size: .82rem; }
+.bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-row .track { height: 14px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.bar-row .fill { height: 100%; border-radius: 2px; }
+.bar-row .val { font-family: var(--font-data); font-size: .76rem; text-align: right; font-variant-numeric: tabular-nums; }
+.pc { font-family: var(--font-data); font-size: .66rem; color: var(--accent); border: 1px solid var(--accent); border-radius: 2px; padding: 0 3px; margin-left: 4px; vertical-align: 1px; }
+
+.tbl-wrap { overflow-x: auto; max-height: 560px; overflow-y: auto; border: 1.5px solid var(--line); border-radius: 3px; }
+table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--panel); font-weight: 600; font-size: .76rem; z-index: 1; }
+th.sortable { cursor: pointer; }
+th.sortable:hover { color: var(--accent); }
+td.num, th.num { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+tbody tr[tabindex] { cursor: pointer; }
+tbody tr:hover { background: var(--accent-soft); }
+tbody tr.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+tbody tr.ignored td { opacity: .45; }
+.heat { position: relative; }
+.heat i { position: absolute; inset: 2px; border-radius: 2px; background: var(--accent); z-index: 0; }
+.heat b { position: relative; font-weight: 400; z-index: 1; }
+td select, td input[type="text"] { padding: 3px 6px; font-size: .8rem; width: auto; }
+td input[type="text"] { width: 170px; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toolbar > * { flex: 0 1 auto; }
+.toolbar input[type="search"], .toolbar input[type="text"] { flex: 1 1 200px; width: auto; }
+.toolbar select { width: auto; max-width: 100%; }
+button.btn, label.btn { font: inherit; font-size: .82rem; font-weight: 600; background: var(--panel); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 3px; padding: 6px 12px; cursor: pointer; box-shadow: 2px 2px 0 var(--line); }
+button.btn:hover, label.btn:hover { background: var(--accent-soft); }
+button.btn.primary, label.btn.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+button.btn.small { font-size: .74rem; padding: 3px 8px; }
+button.btn:disabled { opacity: .45; cursor: not-allowed; }
+button.btn.wide { width: 100%; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.detail { display: grid; gap: 12px; }
+.detail .who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.detail .who h2 { font-size: 1.4rem; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.kv div { background: var(--bg); border-radius: 3px; padding: 6px 10px; }
+.kv .k { font-size: .72rem; color: var(--muted); }
+.kv .v { font-family: var(--font-data); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.wordlist { display: flex; flex-wrap: wrap; gap: 6px; }
+.wordlist span { font-family: var(--font-data); font-size: .78rem; background: var(--bg); border-radius: 3px; padding: 2px 7px; }
+.wordlist span em { font-style: normal; color: var(--muted); margin-left: 4px; }
+
+.kwic { font-family: var(--font-data); font-size: .8rem; display: grid; gap: 2px; max-height: 420px; overflow-y: auto; border: 1.5px solid var(--line); border-radius: 3px; padding: 6px; }
+.kwic div { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 10px; padding: 3px 4px; border-radius: 2px; }
+.kwic div:nth-child(odd) { background: var(--bg); }
+.kwic .spk { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.kwic mark { background: var(--accent-soft); color: var(--ink); font-weight: 600; padding: 0 2px; }
+@media (max-width: 520px) { .kwic div { grid-template-columns: minmax(0,1fr); gap: 0; } }
+
+.drop { border: 2px dashed var(--line); border-radius: 3px; padding: 20px; text-align: center; display: grid; gap: 10px; justify-items: center; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; max-width: 75ch; }
+ol.steps li { min-width: 0; }
+pre.cmd { font-family: var(--font-data); font-size: .78rem; background: var(--bg); border: 1.5px solid var(--line); border-radius: 3px; padding: 8px 10px; overflow-x: auto; margin: 4px 0 0; white-space: pre; }
+.empty { color: var(--muted); font-size: .88rem; padding: 12px; background: var(--bg); border-radius: 3px; }
+.compare-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.step { display: grid; gap: 12px; border-top: 1.5px solid var(--line); padding-top: 16px; }
+.step-title { display: flex; align-items: baseline; gap: 10px; }
+.step-title .num { font-family: var(--font-display); font-size: 1.2rem; color: var(--accent); }
+.save-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toast { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 3px; font-size: .85rem; z-index: 20; }
+footer { font-size: .78rem; color: var(--muted); max-width: 90ch; display: grid; gap: 6px; }
+footer p { margin: 0; }
+.sources { display: grid; gap: 16px; }
+.src-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px 24px; }
+.src { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.src h3 { font-family: var(--font-display); font-weight: 500; font-size: 1rem; }
+.src ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.src li { font-size: .84rem; overflow-wrap: anywhere; }
+.src li > span { display: block; color: var(--muted); font-size: .78rem; }
+.src li > span:only-child { color: var(--ink); font-size: .84rem; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Game Dialogue Explorer<span class="cursor">▌</span></h1>
+      <p class="sub">Pick a game, filter characters by gender, and compare who talks, how much, and how. Built on the Video Game Dialogue Corpus, plus any scripts your class adds.</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="rail">
+      <div class="box field">
+        <label class="lbl" for="game">Game</label>
+        <select id="game"></select>
+        <input type="search" id="gameSearch" placeholder="Filter games…" aria-label="Filter the game list">
+        <button class="btn wide" id="addGameBtn">+ Add a game script</button>
+      </div>
+      <div class="box field">
+        <span class="lbl">Show characters coded as</span>
+        <div class="chips" id="genderChips"></div>
+        <p class="note">Gender coding comes from the corpus authors, or from whoever added the script. "Neutral" covers unknown, mixed or non-gendered speakers (crowds, narrators, machines).</p>
+      </div>
+      <div class="box field">
+        <label class="lbl" for="minWords">Minimum words for character comparisons</label>
+        <input type="number" id="minWords" min="0" step="25" value="100">
+        <p class="note">Rates for characters with only a few lines are noisy. Characters below this size are left out of per-character rate tables.</p>
+      </div>
+      <div class="box field">
+        <span class="lbl">About this script</span>
+        <dl class="facts" id="facts"></dl>
+        <div id="sourceWarn" class="field"></div>
+      </div>
+    </aside>
+
+    <main class="box" style="padding-top:12px">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-overview" aria-selected="true" data-tab="overview">Overview</button>
+        <button class="tab" role="tab" id="tab-characters" aria-selected="false" data-tab="characters">Characters</button>
+        <button class="tab" role="tab" id="tab-language" aria-selected="false" data-tab="language">Language patterns</button>
+        <button class="tab" role="tab" id="tab-script" aria-selected="false" data-tab="script">Full script<span class="badge" id="scriptBadge"></span></button>
+        <button class="tab add" role="tab" id="tab-add" aria-selected="false" data-tab="add">+ Add a game</button>
+      </div>
+      <section class="pane" id="pane-overview" role="tabpanel"></section>
+      <section class="pane" id="pane-characters" role="tabpanel" hidden></section>
+      <section class="pane" id="pane-language" role="tabpanel" hidden></section>
+      <section class="pane" id="pane-script" role="tabpanel" hidden></section>
+      <section class="pane" id="pane-add" role="tabpanel" hidden></section>
+    </main>
+  </div>
+
+  <section class="box sources" id="find-scripts" aria-labelledby="sourcesTitle">
+    <div class="section-head"><h2 id="sourcesTitle">Find more game scripts</h2>
+      <span class="note">Copy dialogue from these pages into the Add a game tab, or download the file and drop it in.</span></div>
+    <div class="src-grid">
+      <div class="src">
+        <h3>Anywhere to start</h3>
+        <ul>
+          <li><a href="https://correlation-machine.com/VideoGameDialogueCorpus/" target="_blank" rel="noopener">Video Game Dialogue Corpus website</a> <span>the games already in this tool, with notes on their sources</span></li>
+          <li><a href="https://gamefaqs.gamespot.com/" target="_blank" rel="noopener">GameFAQs</a> <span>search a game, open its Guides list, and look for entries titled "Script" or "Game Script"</span></li>
+          <li><a href="https://www.fandom.com/" target="_blank" rel="noopener">Fandom wikis</a> <span>many game wikis have quest pages with a Dialogue or Transcript section; search "[game] wiki transcript"</span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Grand Theft Auto V</h3>
+        <ul>
+          <li><a href="https://www.grandtheftwiki.com/Missions_in_GTA_V" target="_blank" rel="noopener">Grand Theft Wiki: Missions in GTA V</a> <span>many missions have a Script page, for example <a href="https://www.grandtheftwiki.com/Prologue_(GTA_V)/Script" target="_blank" rel="noopener">Prologue/Script</a></span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Red Dead Redemption 2</h3>
+        <ul>
+          <li><a href="https://reddead.fandom.com/" target="_blank" rel="noopener">Red Dead Wiki</a> <span>mission pages; some include dialogue</span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Cyberpunk 2077</h3>
+        <ul>
+          <li><a href="https://cyberpunk.fandom.com/" target="_blank" rel="noopener">Cyberpunk Wiki</a> <span>quest and character pages</span></li>
+          <li><a href="https://cyberpunk2077.wiki.fextralife.com/Walkthrough" target="_blank" rel="noopener">Fextralife walkthrough</a> <span>quest summaries and dialogue choices, not full scripts</span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Baldur's Gate 3</h3>
+        <ul>
+          <li><a href="https://bg3.wiki/wiki/Dialogue" target="_blank" rel="noopener">bg3.wiki: Dialogue</a> <span>links to companion banter, location remarks and the wiki's transcripts category</span></li>
+          <li><span>Already in this tool with 38 coded characters. Add a fuller script to go further.</span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Disco Elysium</h3>
+        <ul>
+          <li><a href="https://huggingface.co/datasets/allura-org/disco-elysium-conversations-raw" target="_blank" rel="noopener">Disco Elysium conversations (Hugging Face)</a> <span>community export of about 1,700 lines with "actor" and "dialogue" fields, which this tool reads directly; marked all rights reserved, so use it for analysis only</span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Genshin Impact</h3>
+        <ul>
+          <li><a href="https://github.com/dbtzy/GenshinDialog" target="_blank" rel="noopener">GenshinDialog</a> <span>extracts every character conversation (121,000+ lines, game version 3.1) from community datamined game files; needs Python, and the output may need reshaping to one speaker and line per row</span></li>
+          <li><a href="https://genshin-impact.fandom.com/wiki/Quest" target="_blank" rel="noopener">Genshin Impact Wiki: Quests</a> <span>quest pages with dialogue; in game, Paimon menu › Archive › Travel Log replays finished quests</span></li>
+        </ul>
+      </div>
+      <div class="src">
+        <h3>Where Winds Meet, and other new games</h3>
+        <ul>
+          <li><a href="https://www.pcgamesn.com/where-winds-meet/quests-missions" target="_blank" rel="noopener">PCGamesN quest list</a> <span>no full transcripts exist yet; use this to choose scenes</span></li>
+          <li><span>Transcribe a few scenes yourself, one line per speech in the form <code>NAME: what they say</code>, and mark the script as a sample. Turning on subtitles, or the transcript on a cutscene video, makes this faster.</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Fan transcripts can have gaps and mistakes. Note where each script came from and how much of the game it covers, and treat game dialogue as copyrighted: use it for analysis, and don't republish whole scripts.</p>
+  </section>
+
+  <footer>
+    <p><b>Data and credit.</b> Built on <a href="https://github.com/seannyD/VideoGameDialogueCorpusPublic" target="_blank" rel="noopener">The Video Game Dialogue Corpus</a> by Seán G. Roberts, Stephanie Rennick and contributors
+      (<a href="https://doi.org/10.5281/zenodo.16994468" target="_blank" rel="noopener">doi 10.5281/zenodo.16994468</a>), used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.
+      This tool reformats the corpus's per-character statistics and keyness tables and merges some of its gender groups (neutral, genderless and ambiguous become Neutral). It is not made or endorsed by the corpus authors.</p>
+    <p>If you use the data, please cite: Rennick, S. &amp; Roberts, S. G. (in press). The Video Game Dialogue Corpus. <i>Corpora</i> 19(1). · Rennick, S., Clinton, M., Ioannidou, E., Oh, L., Clooney, C., E. T., Healy, E. &amp; Roberts, S. G. (2023). Gender bias in video game dialogue. <i>Royal Society Open Science</i> 10(5).</p>
+    <p>Games added through this tool keep only word counts and statistics, never the script text. Full-script search runs on a file you load, and that file never leaves your browser. Game titles and dialogue belong to their publishers.</p>
+  </footer>
+</div>
+
+<script src="corpus-data.js"></script>
+<script>
+(function () {
+"use strict";
+const C = window.CORPUS;
+const GENDERS = ["Female", "Male", "Trans", "Neutral", "Other"];
+const GVAR = { Female: "--c-female", Male: "--c-male", Trans: "--c-trans", Neutral: "--c-neutral", Other: "--c-other" };
+const GROUP_TO_GENDER = { female: "Female", GenericFemale: "Female", male: "Male", GenericMale: "Male", trans: "Trans", neutral: "Neutral", genderless: "Neutral", ambiguous: "Neutral" };
+const EXCLUDE_KEYS = new Set(["ACTION", "CHOICE", "LOCATION", "COMMENT", "SYSTEM", "GOTO", "NARRATIVE", "STATUS"]);
+const PRONOUN_SETS = [
+  ["I / me / my", ["i", "me", "my"]],
+  ["you", ["you"]],
+  ["he / his", ["he", "his"]],
+  ["she / hers", ["she", "hers"]],
+  ["they / them / theirs", ["they", "them", "theirs"]],
+];
+const STYLE_MARKERS = [
+  ["Questions (?)", "Question marks per 1,000 words", t => count(t, /\?/g)],
+  ["Exclamations (!)", "Exclamation marks per 1,000 words", t => count(t, /!/g)],
+  ["Hedges", "maybe, perhaps, probably, I think, I guess, I suppose, sort of, kind of, might", t => count(t, /\b(maybe|perhaps|probably|might|i think|i guess|i suppose|sort of|kind of)\b/g)],
+  ["Apologies", "sorry, apologize, apologies, forgive me, my fault", t => count(t, /\b(sorry|apologi[sz]e\w*|apologies|forgive me|my fault)\b/g)],
+  ["Politeness", "please, thank you, thanks", t => count(t, /\b(please|thank|thanks)\b/g)],
+  ["Intensifiers", "really, very, so much, totally, absolutely, extremely", t => count(t, /\b(really|very|so much|totally|absolutely|extremely)\b/g)],
+  ["Swearing", "damn, hell, shit, bastard, crap, bloody, fuck…", t => count(t, /\b(damn\w*|hell|shit\w*|bastard\w*|crap|bloody|fuck\w*|dammit|piss\w*)\b/g)],
+  ["Commands", "Lines that start with a bare verb such as go, come, look, stop, listen, wait, get, give, tell", t => count(t, /(^|[.!?\n]\s*)(go|come|look|stop|listen|wait|get|give|tell|leave|take|move|hurry|run)\b/g)],
+];
+const STOP = new Set(("a about above after again against all am an and any are as at be because been before being below between both but by can could did do does doing down during each few for from further had has have having he her here hers herself him himself his how i if in into is it its itself just let me more most my myself no nor not now of off on once only or other our ours ourselves out over own same she should so some such than that the their theirs them themselves then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours yourself yourselves i'm it's don't that's you're i'll can't i've we're what's there's he's she's let's didn't won't isn't we'll they're you'll doesn't wasn't i'd ain't oh yeah yes ok okay hey uh um ah well just got get go going come know right like").split(" "));
+const SAMPLE_SCRIPT = `Example transcript (made up, for trying the importer)
+[A rain-soaked dock at night]
+CAPTAIN ROSA: Lines secure? We sail at first light.
+FINN: Aye, Captain. Though I think the storm might turn.
+CAPTAIN ROSA: Then we turn with it. Get the crates below.
+FINN: Sorry, Captain. Right away.
+DOCKMASTER: You there! Who signed for this cargo?
+CAPTAIN ROSA: I did. Do you have a problem with that?
+DOCKMASTER: No problem, ma'am. Just checking the ledger.
+MARA: Rosa, please, listen to me. The harbour guard is looking for you.
+CAPTAIN ROSA: Let them look. Finn, cast off.
+FINN: Casting off! Maybe we'll make it after all.
+MARA: Thank you for taking me with you.
+DOCKMASTER: Damn smugglers.`;
+
+// ---------- state ----------
+const state = {
+  gameId: null,
+  genders: new Set(GENDERS),
+  minWords: 100,
+  tab: "overview",
+  selected: null,
+  compareSet: new Set(),
+  sort: { key: "words", dir: -1 },
+  charFilter: "",
+  scripts: {},          // gameId -> parsed script (text stays in this browser)
+  cmpA: "Female", cmpB: "Male", cmpHideStop: false,
+  ftA: "Female", ftB: "Male", ftHideStop: true,
+  search: "",
+};
+// Class library (shared db) and this-browser storage.
+const lib = { db: null, user: null, downloads: null, uid: null, canWrite: null, isOwner: false, status: "connecting", classIndex: {}, readOnly: false };
+const localGames = {};   // id -> full record saved in this browser
+const loadedClass = {};  // id -> full record fetched from the class library
+const loading = {};      // id -> true while fetching
+
+const builtIn = C.games.map(g => ({ ...g }));
+const titleCount = {};
+builtIn.forEach(g => { titleCount[g.title] = (titleCount[g.title] || 0) + 1; });
+builtIn.forEach(g => {
+  g.label = g.title + (titleCount[g.title] > 1 ? `  (${g.id.split("/")[1]} · ${g.sourceType || "source"})` : "");
+  g.hasFeatures = g.chars.some(c => c.pr || c.kw);
+  g.fShare = shareFemale(g.chars);
+});
+let games = [];
+const byId = {};
+function refreshGames() {
+  const classStubs = [];
+  Object.entries(lib.classIndex).forEach(([uid, idx]) => Object.entries(idx || {}).forEach(([gid, m]) => {
+    const id = `class:${uid}:${gid}`;
+    classStubs.push(loadedClass[id] || { id, title: m.title, series: m.series || "", year: m.year, label: m.title, stub: true, custom: { where: "class", uid, gid, addedAt: m.addedAt } });
+  }));
+  const locals = Object.values(localGames);
+  games = [...builtIn, ...classStubs, ...locals];
+  Object.keys(byId).forEach(k => delete byId[k]);
+  games.forEach(g => { byId[g.id] = g; });
+}
+
+// ---------- helpers ----------
+function count(s, re) { const m = s.match(re); return m ? m.length : 0; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function fmt(n, d = 0) { return Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : "–"; }
+function pct(n, d = 0) { return Number.isFinite(n) ? (n * 100).toFixed(d) + "%" : "–"; }
+function gcol(g) { return `var(${GVAR[g] || "--c-other"})`; }
+function sw(g) { return `<span class="sw" style="background:${gcol(g)}"></span>`; }
+function shareFemale(chars) {
+  let f = 0, m = 0;
+  chars.forEach(c => { if (c.g === "Female") f += c.s[1]; else if (c.g === "Male") m += c.s[1]; });
+  return f + m ? f / (f + m) : NaN;
+}
+function game() { return byId[state.gameId] || builtIn[0]; }
+function isPC(g, name) { return (g.pcs || []).some(p => p.toLowerCase() === name.toLowerCase()); }
+function visibleChars() { return game().chars.filter(c => state.genders.has(c.g)); }
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+function copyText(text, label) {
+  const done = () => toast(label + " copied");
+  try { navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done)); } catch (e) { fallbackCopy(text, done); }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) { toast("Select the text and copy it manually"); }
+  ta.remove();
+}
+function toCSV(rows) { return rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n"); }
+function charStats(c) {
+  const [lines, words, sentences, syll] = c.s;
+  return { lines, words, sentences, syll, wpl: lines ? words / lines : NaN, wps: sentences ? words / sentences : NaN, spw: words && syll ? syll / words : NaN };
+}
+function pronounRates(pr, words) {
+  const cols = C.pronounCols;
+  return PRONOUN_SETS.map(([, ws]) => ws.reduce((s, w) => s + (pr ? pr[cols.indexOf(w)] || 0 : 0), 0) / words * 1000);
+}
+function sumBy(chars, f) { return chars.reduce((s, c) => s + f(c), 0); }
+function slug(s) { return (s || "game").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "game"; }
+
+// Log-likelihood (G2) keyness between two frequency tables.
+function keyness(aCounts, aTotal, bCounts, bTotal, minFreq, hideStop) {
+  const words = new Set([...Object.keys(aCounts), ...Object.keys(bCounts)]);
+  const out = [];
+  words.forEach(w => {
+    if (hideStop && STOP.has(w)) return;
+    const a = aCounts[w] || 0, b = bCounts[w] || 0;
+    if (a + b < minFreq) return;
+    const e1 = aTotal * (a + b) / (aTotal + bTotal), e2 = bTotal * (a + b) / (aTotal + bTotal);
+    const g2 = 2 * ((a ? a * Math.log(a / e1) : 0) + (b ? b * Math.log(b / e2) : 0));
+    out.push({ w, a, b, g2, ra: a / aTotal * 10000, rb: b / bTotal * 10000, dir: a / aTotal > b / bTotal ? "A" : "B" });
+  });
+  out.sort((x, y) => y.g2 - x.g2);
+  return { A: out.filter(o => o.dir === "A").slice(0, 25), B: out.filter(o => o.dir === "B").slice(0, 25) };
+}
+
+// ---------- text processing shared by the importer and the full-script tab ----------
+function tokenize(t) { return t.toLowerCase().replace(/[’‘]/g, "'").match(/[a-z0-9]+(?:'[a-z]+)*/g) || []; }
+function syllables(w) {
+  w = w.replace(/[^a-z]/g, "");
+  if (!w) return 0;
+  if (w.length <= 3) return 1;
+  w = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, "").replace(/^y/, "");
+  const m = w.match(/[aeiouy]{1,2}/g);
+  return m ? m.length : 1;
+}
+function cleanSpeaker(s) { return s.replace(/^[\s*_"'“”\-–—]+|[\s*_"'“”]+$/g, "").replace(/\s+/g, " ").trim(); }
+function parseCSV(text, delim) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+function guessCol(headers, names) {
+  const i = headers.findIndex(h => names.some(n => h.toLowerCase().trim() === n));
+  if (i >= 0) return i;
+  return headers.findIndex(h => names.some(n => h.toLowerCase().includes(n)));
+}
+function detectFormat(text, fileName) {
+  const f = (fileName || "").toLowerCase(), t = text.trimStart();
+  if (f.endsWith(".json") || t.startsWith("{") || t.startsWith("[")) return "json";
+  if (f.endsWith(".csv") || f.endsWith(".tsv")) return "table";
+  const first = t.split(/\r?\n/, 1)[0] || "";
+  if (first.includes("\t") && !/^[^:\t]{1,60}:/.test(first)) return "table";
+  return "colon";
+}
+// Returns {format, lines:[[speaker, text]], headers?, cols?, record?}
+function parseInput(text, fileName, opts) {
+  const o = Object.assign({ format: "auto", strip: true, join: true, spkCol: -1, txtCol: -1 }, opts || {});
+  const format = o.format === "auto" ? detectFormat(text, fileName) : o.format;
+  const strip = s => (o.strip ? s.replace(/\[[^\]]*\]|\([^)]*\)|\*[^*\n]+\*/g, " ") : s).replace(/\s+/g, " ").trim();
+  const lines = [];
+  if (format === "json") {
+    const json = JSON.parse(text);
+    if (json && json.format === "gde-game") return { format: "gde", record: json.record, lines: [] };
+    if (Array.isArray(json) && json.length && typeof json[0] === "object" && !Array.isArray(json[0]) && !EXCLUDE_KEYS.has(Object.keys(json[0])[0]) && Object.keys(json[0]).length > 1) {
+      // A list of row objects, e.g. a datamine export: treat like a table.
+      const headers = [...new Set(json.slice(0, 200).flatMap(r => Object.keys(r || {})))];
+      const rows = json.map(r => headers.map(h => r && r[h] != null ? String(r[h]) : ""));
+      return tableLines(headers, rows, o, strip, "json-table");
+    }
+    const walk = v => {
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      if (v && typeof v === "object") for (const k in v) {
+        const val = v[k];
+        if (!EXCLUDE_KEYS.has(k) && !k.startsWith("_") && typeof val === "string") { const t = val.trim(); if (t) lines.push([k, t]); }
+        else walk(val);
+      }
+    };
+    walk(json.text || json);
+    return { format: "json", lines };
+  }
+  if (format === "table") {
+    const firstLine = text.split(/\r?\n/, 1)[0];
+    const delim = (fileName || "").toLowerCase().endsWith(".tsv") || firstLine.split("\t").length > firstLine.split(",").length ? "\t" : ",";
+    const rows = parseCSV(text, delim);
+    if (!rows.length) return { format, lines };
+    return tableLines(rows[0], rows.slice(1), o, strip, "table");
+  }
+  // "Name: line" transcript
+  const re = /^\s*([^:\n]{1,60}?)\s*[:：]\s*(.+)$/;
+  text.split(/\r?\n/).forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    const m = line.match(re);
+    let spk = m ? cleanSpeaker(m[1]) : "";
+    if (m && spk && !/^\d+$/.test(spk) && !/https?$/i.test(spk) && spk.split(" ").length <= 6 && !/^[\[(]/.test(spk)) {
+      const t = strip(m[2]); if (t) lines.push([spk, t]);
+    } else if (o.join && lines.length && !/^[\[(*]/.test(line) && !/^\d+$/.test(line) && !/-->/.test(line)) {
+      const t = strip(line); if (t) lines[lines.length - 1][1] += " " + t;
+    }
+  });
+  return { format: "colon", lines };
+}
+function tableLines(headers, rows, o, strip, format) {
+  let spkCol = o.spkCol >= 0 ? o.spkCol : guessCol(headers, ["speaker", "character", "actor", "name", "talker", "talkrole", "role", "who"]);
+  let txtCol = o.txtCol >= 0 ? o.txtCol : guessCol(headers, ["text", "line", "dialogue", "dialog", "utterance", "content", "subtitle", "sentence", "message"]);
+  if (txtCol === spkCol) txtCol = -1;
+  if (spkCol < 0 && txtCol < 0 && o.spkCol < 0 && headers.length >= 2) {
+    // No recognisable header row: treat the file as "speaker, line" rows from the first line on.
+    rows = [headers, ...rows];
+    headers = headers.map((_, i) => "column " + (i + 1));
+    spkCol = 0; txtCol = 1;
+  }
+  const lines = [];
+  if (spkCol >= 0 && txtCol >= 0) rows.forEach(r => {
+    const spk = cleanSpeaker(r[spkCol] || ""), t = strip(r[txtCol] || "");
+    if (spk && t) lines.push([spk, t]);
+  });
+  return { format, lines, headers, cols: [spkCol, txtCol] };
+}
+// Apply a saved speaker map: original name (lower case) -> final name, or null to ignore.
+function mapSpeaker(map, name) {
+  if (!map) return name;
+  const k = name.toLowerCase();
+  return Object.prototype.hasOwnProperty.call(map, k) ? map[k] : name;
+}
+
+// ---------- class library + browser storage ----------
+function idb() {
+  return new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open("gde", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("games", { keyPath: "id" });
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+}
+async function idbAll() { const d = await idb(); return new Promise((res, rej) => { const q = d.transaction("games").objectStore("games").getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+async function idbPut(rec) { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction("games", "readwrite"); t.objectStore("games").put(rec); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+async function idbDel(id) { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction("games", "readwrite"); t.objectStore("games").delete(id); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+
+function encodeCounts(kw) { return Object.entries(kw).sort((a, b) => b[1] - a[1]).map(([w, n]) => w + " " + n).join("|"); }
+function decodeCounts(s) { const o = {}; (s || "").split("|").forEach(p => { const i = p.lastIndexOf(" "); if (i > 0) o[p.slice(0, i)] = +p.slice(i + 1); }); return o; }
+
+async function initLibrary() {
+  const cl = window.claude;
+  if (!cl || !cl.use) { lib.status = "offline"; renderAddPane(); renderFacts(); return; }
+  try {
+    const [db, user, downloads] = await Promise.all([cl.use("db"), cl.use("user"), cl.use("downloads")]);
+    lib.db = db; lib.user = user; lib.downloads = downloads;
+    if (user) {
+      lib.uid = await user.id();
+      lib.isOwner = await user.isOwner();
+      lib.canWrite = await user.can("data.write");
+    }
+    if (!db) { lib.status = "offline"; renderAddPane(); renderFacts(); return; }
+    lib.status = "loading";
+    const timer = setTimeout(() => { if (lib.status === "loading") { lib.status = "slow"; renderAddPane(); } }, 10000);
+    db.collection("added").onSnapshot(snap => {
+      clearTimeout(timer);
+      lib.status = "ready";
+      const idx = {};
+      snap.docs.forEach(d => { const data = d.data(); if (data && data.games) idx[d.id] = data.games; });
+      lib.classIndex = idx;
+      Object.keys(loadedClass).forEach(id => { const [, uid, gid] = id.split(":"); if (!idx[uid] || !idx[uid][gid]) delete loadedClass[id]; });
+      refreshGames();
+      if (lib.pendingStart && byId[lib.pendingStart] && state.gameId === "Hades/Hades") { state.gameId = lib.pendingStart; renderAll(); }
+      lib.pendingStart = null;
+      if (!byId[state.gameId]) state.gameId = builtIn[0].id;
+      buildGameSelect(document.getElementById("gameSearch").value);
+      if (game().stub) loadClassGame(game());
+      renderAddPane(); renderFacts();
+    }, err => { clearTimeout(timer); lib.status = "error"; lib.error = err.message; renderAddPane(); });
+  } catch (e) { lib.status = "offline"; renderAddPane(); }
+}
+
+async function loadClassGame(stub) {
+  if (loading[stub.id] || loadedClass[stub.id]) return;
+  loading[stub.id] = true;
+  try {
+    const { uid, gid } = stub.custom;
+    const base = `added/${uid}/games/${gid}`;
+    const head = await lib.db.doc(base).get();
+    if (!head.exists) throw new Error("This game's data is missing from the class library.");
+    const h = JSON.parse(JSON.stringify(head.data()));
+    const chunks = await lib.db.collection(base + "/words").get();
+    const kwBy = {};
+    chunks.docs.forEach(d => Object.entries((d.data() || {}).c || {}).forEach(([n, s]) => { kwBy[n] = decodeCounts(s); }));
+    h.chars.forEach(c => { if (kwBy[c.n]) c.kw = kwBy[c.n]; });
+    loadedClass[stub.id] = finishRecord(Object.assign(h, { id: stub.id, custom: Object.assign({}, h.custom, { where: "class", uid, gid }) }));
+    refreshGames();
+  } catch (e) {
+    toast("Could not load that game: " + (e.message || e.code));
+  }
+  delete loading[stub.id];
+  if (state.gameId === stub.id) renderAll();
+}
+
+function finishRecord(r) {
+  r.label = r.title;
+  r.hasFeatures = r.chars.some(c => c.pr || c.kw);
+  r.fShare = shareFemale(r.chars);
+  r.groups = r.groups || {};
+  r.chars.sort((a, b) => b.s[1] - a.s[1]);
+  return r;
+}
+
+// Splits a record into a header document plus word-count chunks, each under the 256 KiB limit.
+function packForClass(rec) {
+  let chars = rec.chars.map(c => ({ n: c.n, g: c.g, grp: c.grp, s: c.s, pr: c.pr, qw: c.qw, st: c.st }));
+  const header = () => ({ title: rec.title, series: rec.series, year: rec.year, source: rec.source, sourceType: rec.sourceType, completeness: rec.completeness, choices: rec.choices, pcs: rec.pcs, chars, custom: { addedAt: rec.custom.addedAt, notes: rec.custom.notes, importOpts: rec.custom.importOpts, speakerMap: rec.custom.speakerMap, totals: rec.custom.totals } });
+  while (JSON.stringify(header()).length > 230000 && chars.length > 50) chars = chars.slice(0, Math.floor(chars.length * 0.8));
+  const kept = new Set(chars.map(c => c.n));
+  const chunks = []; let cur = {}, size = 0;
+  rec.chars.forEach(c => {
+    if (!kept.has(c.n) || !c.kw) return;
+    const s = encodeCounts(c.kw);
+    if (size + s.length > 200000 && size) { chunks.push(cur); cur = {}; size = 0; }
+    cur[c.n] = s.length > 240000 ? s.slice(0, s.lastIndexOf("|", 240000)) : s; size += s.length + c.n.length;
+  });
+  if (size) chunks.push(cur);
+  return { header: header(), chunks, dropped: rec.chars.length - chars.length };
+}
+async function saveToClass(rec) {
+  const { uid } = lib, gid = rec.custom.gid;
+  const base = `added/${uid}/games/${gid}`;
+  const { header, chunks, dropped } = packForClass(rec);
+  for (let i = 0; i < chunks.length; i++) await lib.db.doc(`${base}/words/${String(i).padStart(3, "0")}`).set({ c: chunks[i] });
+  await lib.db.doc(base).set(header);
+  const idxRef = lib.db.doc(`added/${uid}`);
+  const cur = await idxRef.get();
+  const gamesIdx = Object.assign({}, cur.exists ? (cur.data().games || {}) : {});
+  gamesIdx[gid] = { title: rec.title, series: rec.series || "", year: rec.year || null, words: rec.custom.totals.words, chars: rec.chars.length, addedAt: rec.custom.addedAt };
+  await idxRef.set({ games: gamesIdx });
+  return dropped;
+}
+async function deleteFromClass(g) {
+  const { uid, gid } = g.custom, base = `added/${uid}/games/${gid}`;
+  const chunks = await lib.db.collection(base + "/words").get();
+  for (const d of chunks.docs) await lib.db.doc(`${base}/words/${d.id}`).delete();
+  await lib.db.doc(base).delete();
+  const idxRef = lib.db.doc(`added/${uid}`);
+  const cur = await idxRef.get();
+  if (cur.exists) { const gi = Object.assign({}, cur.data().games || {}); delete gi[gid]; await idxRef.set({ games: gi }); }
+}
+function dbErrorText(e) {
+  if (!e) return "Something went wrong.";
+  if (e.code === "quota_exceeded") return "The class library is full. Delete a game you no longer need, then try again.";
+  if (e.code === "invalid_argument") return "You don't have permission to add to the class library. Ask the instructor to share the page with you as an editor or contributor, or save it in this browser instead.";
+  if (e.code === "resource_exhausted") return "Too many saves at once. Wait a minute and try again.";
+  return e.message || "The class library could not be reached. Try again in a moment.";
+}
+
+// ---------- controls ----------
+const gameSel = document.getElementById("game");
+function buildGameSelect(filter) {
+  const f = (filter || "").toLowerCase();
+  const groups = {};
+  const add = (key, g) => { (groups[key] = groups[key] || []).push(g); };
+  games.forEach(g => {
+    if (f && !(g.label + " " + g.series).toLowerCase().includes(f)) return;
+    if (g.custom && g.custom.where === "class") add("★ Class library", g);
+    else if (g.custom) add("★ Saved in this browser", g);
+    else add(g.series, g);
+  });
+  const order = Object.keys(groups).sort((a, b) => (b.startsWith("★") - a.startsWith("★")) || a.localeCompare(b));
+  gameSel.innerHTML = order.map(s => `<optgroup label="${esc(s)}">${groups[s].sort((a, b) => (a.series || "").localeCompare(b.series || "") || (a.year || 0) - (b.year || 0) || a.label.localeCompare(b.label))
+    .map(g => `<option value="${esc(g.id)}" ${g.id === state.gameId ? "selected" : ""}>${esc(g.label)}${g.year ? " · " + g.year : ""}</option>`).join("")}</optgroup>`).join("");
+}
+gameSel.addEventListener("change", () => setGame(gameSel.value));
+document.getElementById("gameSearch").addEventListener("input", e => {
+  buildGameSelect(e.target.value);
+  if (gameSel.options.length && !gameSel.querySelector(`option[value="${CSS.escape(state.gameId)}"]`)) setGame(gameSel.options[0].value);
+});
+document.getElementById("minWords").addEventListener("input", e => { state.minWords = Math.max(0, +e.target.value || 0); renderAll(); });
+document.getElementById("addGameBtn").addEventListener("click", () => setTab("add"));
+
+function setGame(id) {
+  state.gameId = id; state.selected = null; state.compareSet.clear(); state.charFilter = "";
+  state.cmpA = "Female"; state.cmpB = "Male"; state.ftA = "Female"; state.ftB = "Male";
+  try { localStorage.setItem("gde-game", id); } catch (e) {}
+  if (state.tab === "add") setTab("overview");
+  renderAll();
+}
+
+function renderChips() {
+  const g = game();
+  const counts = {}; (g.chars || []).forEach(c => { counts[c.g] = (counts[c.g] || 0) + 1; });
+  document.getElementById("genderChips").innerHTML = GENDERS.filter(x => counts[x]).map(x =>
+    `<label class="chip ${state.genders.has(x) ? "" : "off"}"><input type="checkbox" id="g-${x}" data-g="${x}" ${state.genders.has(x) ? "checked" : ""}>${sw(x)}${x}<span class="n">${counts[x]}</span></label>`).join("");
+  document.querySelectorAll("#genderChips input").forEach(inp => inp.addEventListener("change", () => {
+    inp.checked ? state.genders.add(inp.dataset.g) : state.genders.delete(inp.dataset.g);
+    renderAll();
+  }));
+}
+
+function canDelete(g) {
+  if (!g.custom) return false;
+  if (g.custom.where === "local") return true;
+  return lib.db && (lib.isOwner || g.custom.uid === lib.uid);
+}
+function renderFacts() {
+  const g = game();
+  const added = g.custom ? (g.custom.where === "class" ? "Class library" : "This browser only") : "Video Game Dialogue Corpus";
+  const rows = [["Series", g.series], ["Year", g.year], ["From", added], ["Source type", g.sourceType], ["Completeness", g.completeness], ["Dialogue choices", g.choices], [g.custom ? "Added" : "Corpus folder", g.custom ? (g.custom.addedAt ? new Date(g.custom.addedAt).toLocaleDateString() : "") : g.id]];
+  document.getElementById("facts").innerHTML = rows.filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") +
+    (g.source && /^https?:/.test(g.source) ? `<dt>Script source</dt><dd><a href="${esc(g.source)}" target="_blank" rel="noopener">link</a></dd>` : (g.source && g.custom ? `<dt>Script source</dt><dd>${esc(g.source)}</dd>` : "")) +
+    (g.custom && g.custom.notes ? `<dt>Notes</dt><dd>${esc(g.custom.notes)}</dd>` : "");
+  const warns = [];
+  if (g.stub) warns.push("Loading this game from the class library…");
+  if (g.completeness === "sample") warns.push("This script is only a sample of the game's dialogue.");
+  if (g.custom && !g.stub) warns.push("Added by a class member. Check the source and the gender coding before relying on it.");
+  if (!g.custom && !g.hasFeatures) warns.push("No precomputed pronoun or keyword counts for this game. Load its full script for language analysis.");
+  if (titleCount[g.title] > 1 && !g.custom) warns.push("The corpus has more than one script for this game from different sources. Counts can differ between versions.");
+  document.getElementById("sourceWarn").innerHTML = warns.map(w => `<div class="warnbox">${w}</div>`).join("") +
+    (canDelete(g) && !g.stub ? `<button class="btn small" id="delGame">Delete this added game</button><div id="delConfirm"></div>` : "");
+  const del = document.getElementById("delGame");
+  if (del) del.addEventListener("click", () => {
+    document.getElementById("delConfirm").innerHTML = `<div class="warnbox field">Delete "${esc(g.title)}" ${g.custom.where === "class" ? "for everyone in the class" : "from this browser"}? This cannot be undone.
+      <div class="toolbar"><button class="btn small primary" id="delYes">Delete</button><button class="btn small" id="delNo">Keep it</button></div></div>`;
+    document.getElementById("delNo").addEventListener("click", () => { document.getElementById("delConfirm").innerHTML = ""; });
+    document.getElementById("delYes").addEventListener("click", async () => {
+      try {
+        if (g.custom.where === "class") { await deleteFromClass(g); delete loadedClass[g.id]; }
+        else { await idbDel(g.id); delete localGames[g.id]; }
+        refreshGames(); toast("Deleted"); setGame(builtIn[0].id);
+      } catch (e) { toast(dbErrorText(e)); }
+    });
+  });
+}
+
+// ---------- tabs ----------
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => setTab(t.dataset.tab)));
+function setTab(name) {
+  state.tab = name;
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll(".pane").forEach(p => { p.hidden = p.id !== "pane-" + name; });
+  try { localStorage.setItem("gde-tab", name); } catch (e) {}
+}
+
+// ---------- overview ----------
+function renderOverview() {
+  const g = game(), chars = visibleChars();
+  const totWords = sumBy(chars, c => c.s[1]);
+  const byG = {};
+  GENDERS.forEach(x => { byG[x] = { n: 0, w: 0, l: 0 }; });
+  chars.forEach(c => { byG[c.g].n++; byG[c.g].w += c.s[1]; byG[c.g].l += c.s[0]; });
+  const present = GENDERS.filter(x => byG[x].n);
+  const fm = byG.Female.w + byG.Male.w;
+  const pcWords = sumBy(chars.filter(c => isPC(g, c.n)), c => c.s[1]);
+
+  const stack = (key, total) => `<div class="stack">${present.map(x => {
+    const v = byG[x][key] / total; return v > 0 ? `<span style="width:${v * 100}%;background:${gcol(x)}" title="${x}: ${pct(v, 1)}">${v > .06 ? pct(v) : ""}</span>` : "";
+  }).join("")}</div>`;
+
+  const top = chars.slice(0, 15);
+  const maxW = top.length ? top[0].s[1] : 1;
+
+  // Strip: female share of gendered (F+M) dialogue in every loaded game.
+  const strip = games.filter(x => !x.stub && Number.isFinite(x.fShare));
+  const W = 640, H = 92, pad = 24;
+  const xs = v => pad + v * (W - 2 * pad);
+  const rank = strip.slice().sort((a, b) => b.fShare - a.fShare).indexOf(g) + 1;
+  const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Female share of dialogue across all games" style="max-width:100%;display:block">
+    <line x1="${xs(0)}" x2="${xs(1)}" y1="44" y2="44" stroke="var(--line)" stroke-width="2"/>
+    <line x1="${xs(.5)}" x2="${xs(.5)}" y1="20" y2="68" stroke="var(--muted)" stroke-dasharray="3 3"/>
+    ${[0, .25, .5, .75, 1].map(t => `<text x="${xs(t)}" y="86" font-size="11" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${t * 100}%</text>`).join("")}
+    ${strip.map((x, i) => x === g ? "" : `<circle cx="${xs(x.fShare)}" cy="${44 + ((i % 5) - 2) * 5}" r="4" fill="${x.custom ? "var(--accent)" : "var(--c-female)"}" fill-opacity=".35"><title>${esc(x.label)}: ${pct(x.fShare, 1)}</title></circle>`).join("")}
+    ${Number.isFinite(g.fShare) ? `<circle cx="${xs(g.fShare)}" cy="44" r="8" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"><title>${esc(g.label)}: ${pct(g.fShare, 1)}</title></circle>
+    <text x="${Math.min(Math.max(xs(g.fShare), 60), W - 60)}" y="14" font-size="12" text-anchor="middle" fill="var(--ink)" font-family="IBM Plex Sans, sans-serif" font-weight="600">this game · ${pct(g.fShare, 1)}</text>` : ""}
+  </svg>`;
+
+  document.getElementById("pane-overview").innerHTML = `
+    <div class="section">
+      <div><div class="eyebrow">${esc(g.series)}${g.year ? " · " + g.year : ""}${g.custom ? " · added by class" : ""}</div><h2 style="font-size:1.6rem">${esc(g.label)}</h2></div>
+      <div class="tiles">
+        <div class="tile"><div class="v">${fmt(totWords)}</div><div class="k">words of dialogue shown</div></div>
+        <div class="tile"><div class="v">${fmt(chars.length)}</div><div class="k">speaking characters shown</div></div>
+        <div class="tile"><div class="v">${fm ? pct(byG.Female.w / fm) : "–"}</div><div class="k">of gendered dialogue is spoken by female characters</div></div>
+        <div class="tile"><div class="v">${totWords ? pct(pcWords / totWords) : "–"}</div><div class="k">spoken by main player characters${(g.pcs || []).length ? "" : " (none listed)"}</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>Who is in the cast, and who gets to talk?</h3>
+        <div class="legend">${present.map(x => `<span>${sw(x)}${x}</span>`).join("")}</div></div>
+      ${chars.length ? `
+      <div class="stack-row"><span>Share of characters</span>${stack("n", chars.length)}</div>
+      <div class="stack-row"><span>Share of words</span>${stack("w", totWords)}</div>
+      <div class="stack-row"><span>Share of lines</span>${stack("l", sumBy(chars, c => c.s[0]))}</div>
+      <p class="note">If a group's share of words is bigger than its share of characters, its characters talk more than average.</p>` : `<div class="empty">No characters match the gender filter.</div>`}
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>Top speakers</h3><span class="note">Click a name to open it in Characters.</span></div>
+      <div class="bars">${top.map(c => `<div class="bar-row"><span class="name"><a href="#" data-open="${esc(c.n)}">${esc(c.n)}</a>${isPC(g, c.n) ? '<span class="pc">PC</span>' : ""}</span>
+        <span class="track"><span class="fill" style="display:block;width:${c.s[1] / maxW * 100}%;background:${gcol(c.g)}"></span></span>
+        <span class="val">${fmt(c.s[1])}</span></div>`).join("") || '<div class="empty">No characters to show.</div>'}</div>
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>How does this game compare with the others?</h3>
+        ${rank ? `<span class="note">Ranked ${rank} of ${strip.length} games by female share</span>` : ""}</div>
+      ${svg}
+      <p class="note">Each dot is one game script: the percentage of male + female dialogue spoken by female characters (ignores the gender filter). Orange dots are corpus games, purple dots are games your class added. The dashed line marks parity.</p>
+    </div>`;
+  document.querySelectorAll("#pane-overview [data-open]").forEach(a => a.addEventListener("click", e => {
+    e.preventDefault(); state.selected = a.dataset.open; setTab("characters"); renderCharacters();
+  }));
+}
+
+// ---------- characters ----------
+const COLS = [
+  ["sel", "Compare", false], ["n", "Character", false], ["g", "Gender", false], ["lines", "Lines", true], ["words", "Words", true],
+  ["share", "% of words", true], ["wpl", "Words / line", true], ["wps", "Words / sentence", true], ["spw", "Syllables / word", true],
+];
+function charRows() {
+  const chars = visibleChars(), tot = sumBy(chars, c => c.s[1]);
+  return chars.map(c => { const s = charStats(c); return { c, n: c.n, g: c.g, ...s, share: tot ? s.words / tot : 0 }; });
+}
+function renderCharacters() {
+  const g = game();
+  let rows = charRows();
+  const f = state.charFilter.toLowerCase();
+  if (f) rows = rows.filter(r => r.n.toLowerCase().includes(f));
+  const { key, dir } = state.sort;
+  rows.sort((a, b) => (typeof a[key] === "string" ? a[key].localeCompare(b[key]) : ((a[key] || 0) - (b[key] || 0))) * dir);
+  const shown = rows.slice(0, 400);
+
+  const pane = document.getElementById("pane-characters");
+  pane.innerHTML = `
+    <div id="detail"></div>
+    <div class="section">
+      <div class="section-head"><h3>All speaking characters</h3>
+        <div class="toolbar">
+          <input type="search" id="charFilter" placeholder="Find a character…" value="${esc(state.charFilter)}" aria-label="Find a character">
+          <button class="btn small" id="copyChars">Copy table as CSV</button>
+          ${state.compareSet.size ? `<button class="btn small" id="clearCmp">Clear ${state.compareSet.size} picked</button>` : ""}
+        </div></div>
+      <p class="note">Click a row for a character profile. Tick "Compare" to put up to 12 characters side by side on the Language patterns tab.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr>${COLS.map(([k, label, num]) => `<th class="${num ? "num " : ""}${k !== "sel" ? "sortable" : ""}" data-k="${k}">${label}${state.sort.key === k ? (dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead>
+        <tbody>${shown.map(r => `<tr tabindex="0" data-n="${esc(r.n)}" class="${state.selected === r.n ? "sel" : ""}">
+          <td><input type="checkbox" aria-label="Compare ${esc(r.n)}" data-cmp="${esc(r.n)}" ${state.compareSet.has(r.n) ? "checked" : ""}></td>
+          <td>${esc(r.n)}${isPC(g, r.n) ? '<span class="pc">PC</span>' : ""}</td>
+          <td><span style="display:inline-flex;align-items:center;gap:6px">${sw(r.g)}${r.g}</span></td>
+          <td class="num">${fmt(r.lines)}</td><td class="num">${fmt(r.words)}</td><td class="num">${pct(r.share, 1)}</td>
+          <td class="num">${fmt(r.wpl, 1)}</td><td class="num">${fmt(r.wps, 1)}</td><td class="num">${fmt(r.spw, 2)}</td></tr>`).join("")}</tbody>
+      </table></div>
+      ${rows.length > shown.length ? `<p class="note">Showing the first ${shown.length} of ${rows.length}. Use the search box to find others.</p>` : ""}
+    </div>`;
+
+  pane.querySelector("#charFilter").addEventListener("input", e => { state.charFilter = e.target.value; renderCharacters(); const n = document.getElementById("charFilter"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+  pane.querySelectorAll("th.sortable").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.k; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === "n" || k === "g" ? 1 : -1) }; renderCharacters();
+  }));
+  pane.querySelectorAll("tbody tr").forEach(tr => {
+    const open = e => { if (e.target.matches("input")) return; state.selected = tr.dataset.n; renderCharacters(); document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
+    tr.addEventListener("click", open);
+    tr.addEventListener("keydown", e => { if (e.key === "Enter") open(e); });
+  });
+  pane.querySelectorAll("[data-cmp]").forEach(cb => cb.addEventListener("change", () => {
+    if (cb.checked) { if (state.compareSet.size >= 12) { cb.checked = false; toast("You can compare up to 12 characters"); return; } state.compareSet.add(cb.dataset.cmp); }
+    else state.compareSet.delete(cb.dataset.cmp);
+    renderCharacters(); renderLanguage(); renderScript();
+  }));
+  const clr = pane.querySelector("#clearCmp");
+  if (clr) clr.addEventListener("click", () => { state.compareSet.clear(); renderCharacters(); renderLanguage(); renderScript(); });
+  pane.querySelector("#copyChars").addEventListener("click", () => {
+    copyText(toCSV([["game", "character", "gender", "groups", "player_character", "lines", "words", "share_of_words", "words_per_line", "words_per_sentence", "syllables_per_word"],
+      ...rows.map(r => [g.title, r.n, r.g, (r.c.grp || []).join(";"), isPC(g, r.n) ? "yes" : "no", r.lines, r.words, r.share.toFixed(4), r.wpl.toFixed(2), r.wps.toFixed(2), Number.isFinite(r.spw) ? r.spw.toFixed(3) : ""])]), "Character table");
+  });
+  renderDetail();
+}
+
+function renderDetail() {
+  const box = document.getElementById("detail");
+  if (!box) return;
+  const g = game();
+  const c = g.chars.find(x => x.n === state.selected);
+  if (!c) { box.innerHTML = `<div class="empty">Select a character in the table to see their profile.</div>`; return; }
+  const s = charStats(c);
+  const pool = visibleChars().filter(x => x.s[1] >= state.minWords);
+  const median = arr => { const a = arr.filter(Number.isFinite).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : NaN; };
+  const medWpl = median(pool.map(x => charStats(x).wpl));
+  const medWps = median(pool.map(x => charStats(x).wps));
+  const all = g.chars.slice().sort((a, b) => b.s[1] - a.s[1]);
+  const rank = all.indexOf(c) + 1;
+
+  let pronHTML = "";
+  if (c.pr) {
+    const mine = pronounRates(c.pr, c.s[1]);
+    const withPr = pool.filter(x => x.pr);
+    const totW = sumBy(withPr, x => x.s[1]);
+    const gameRates = PRONOUN_SETS.map((_, i) => sumBy(withPr, x => pronounRates(x.pr, 1)[i] / 1000) / totW * 1000);
+    const max = Math.max(...mine, ...gameRates.filter(Number.isFinite), 1);
+    pronHTML = `<div class="section"><h3>Pronoun use per 1,000 words</h3>
+      <div class="bars">${PRONOUN_SETS.map(([label], i) => `
+        <div class="bar-row"><span class="name">${label}</span>
+          <span class="track" style="display:grid;gap:2px;height:auto;background:none">
+            <span class="fill" style="display:block;height:9px;width:${mine[i] / max * 100}%;background:${gcol(c.g)}"></span>
+            <span class="fill" style="display:block;height:5px;width:${(gameRates[i] || 0) / max * 100}%;background:var(--line)"></span></span>
+          <span class="val">${fmt(mine[i], 1)} <span style="color:var(--muted)">/ ${fmt(gameRates[i], 1)}</span></span></div>`).join("")}</div>
+      <p class="note">Thick bar: ${esc(c.n)}. Thin grey bar and grey number: everyone shown in this game with at least ${state.minWords} words.</p></div>`;
+  }
+  let kwHTML = "";
+  if (c.kw) {
+    const top = Object.entries(c.kw).filter(([w]) => !g.custom || !STOP.has(w)).sort((a, b) => b[1] - a[1]).slice(0, 18);
+    kwHTML = `<div class="section"><h3>${g.custom ? "Most used words" : "Most used corpus keywords"}</h3><div class="wordlist">${top.map(([w, n]) => `<span>${esc(w)}<em>${n}</em></span>`).join("")}</div>
+      <p class="note">${g.custom ? "Common function words hidden." : "From the corpus authors' list of 200 words that differ most between male and female speech across all games."}</p></div>`;
+  }
+  let scriptHTML = "";
+  const sc = state.scripts[g.id];
+  if (sc && sc.byChar[c.n]) {
+    const lines = sc.byChar[c.n].lines;
+    const sample = lines.length <= 6 ? lines : Array.from({ length: 6 }, (_, i) => lines[Math.floor((i + .5) * lines.length / 6)]);
+    const rest = mergeCounts(Object.entries(sc.byChar).filter(([n, v]) => n !== c.n && state.genders.has(v.g)).map(([, v]) => v));
+    const k = keyness(sc.byChar[c.n].counts, sc.byChar[c.n].words, rest.counts, rest.words, 3, true);
+    scriptHTML = `<div class="two">
+      <div class="section"><h3>Sample lines</h3><div class="kwic">${sample.map(l => `<div style="grid-template-columns:minmax(0,1fr)"><span>${esc(l)}</span></div>`).join("")}</div></div>
+      <div class="section"><h3>Words ${esc(c.n)} uses more than everyone else</h3>
+        ${k.A.length ? `<div class="wordlist">${k.A.slice(0, 20).map(o => `<span>${esc(o.w)}<em>${o.a}</em></span>`).join("")}</div>` : '<div class="empty">Not enough text.</div>'}
+        <p class="note">Log-likelihood keyness against all other shown characters, common function words hidden.</p></div></div>`;
+  }
+
+  box.innerHTML = `<div class="box detail" style="box-shadow:none;border-color:var(--accent)">
+    <div class="section-head"><div class="who"><h2>${esc(c.n)}</h2>${sw(c.g)}<span>${c.g}</span>${isPC(g, c.n) ? '<span class="pc">PLAYER CHARACTER</span>' : ""}
+      ${c.grp && c.grp.length ? `<span class="note">group: ${esc(c.grp.join(", "))}</span>` : ""}</div>
+      <button class="btn small" id="closeDetail">Close</button></div>
+    <div class="kv">
+      <div><div class="k">Rank by words</div><div class="v">${rank} of ${all.length}</div></div>
+      <div><div class="k">Words</div><div class="v">${fmt(s.words)}</div></div>
+      <div><div class="k">Lines</div><div class="v">${fmt(s.lines)}</div></div>
+      <div><div class="k">Words per line</div><div class="v">${fmt(s.wpl, 1)} <span class="note">median ${fmt(medWpl, 1)}</span></div></div>
+      <div><div class="k">Words per sentence</div><div class="v">${fmt(s.wps, 1)} <span class="note">median ${fmt(medWps, 1)}</span></div></div>
+      <div><div class="k">Syllables per word</div><div class="v">${fmt(s.spw, 2)}</div></div>
+    </div>
+    ${s.words < state.minWords ? `<div class="warnbox">${esc(c.n)} has fewer than ${state.minWords} words, so rates below may not mean much.</div>` : ""}
+    ${pronHTML}${kwHTML}${scriptHTML}
+    ${!sc ? `<p class="note">Load this game's script on the Full script tab to see sample lines${g.custom ? "" : " and distinctive words"} for this character.</p>` : ""}
+  </div>`;
+  box.querySelector("#closeDetail").addEventListener("click", () => { state.selected = null; renderCharacters(); });
+}
+
+// ---------- language patterns (stored counts) ----------
+function groupOptions(chars, includeChars) {
+  const gs = GENDERS.filter(x => chars.some(c => c.g === x));
+  const opts = gs.map(x => [x, `All ${x.toLowerCase()} characters`]);
+  opts.push(["__PC", "Main player characters"], ["__NPC", "Everyone except player characters"]);
+  if (includeChars) chars.filter(c => c.s[1] >= state.minWords).slice(0, 150).forEach(c => opts.push(["c:" + c.n, c.n]));
+  return opts;
+}
+function pickMembers(key, chars, other) {
+  const g = game();
+  if (key === "__REST") return chars.filter(c => !other.includes(c));
+  if (key === "__PC") return chars.filter(c => isPC(g, c.n));
+  if (key === "__NPC") return chars.filter(c => !isPC(g, c.n));
+  if (key.startsWith("c:")) return chars.filter(c => c.n === key.slice(2));
+  return chars.filter(c => c.g === key);
+}
+function selectHTML(id, opts, value, withRest) {
+  const all = withRest ? [["__REST", "Everyone else shown"], ...opts] : opts;
+  return `<select id="${id}">${all.map(([v, l]) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+}
+function heatTable(headers, rows, digits) {
+  const max = headers.map((_, i) => Math.max(...rows.map(r => r.vals[i]).filter(Number.isFinite), 1e-9));
+  return `<div class="tbl-wrap" style="max-height:none"><table><thead><tr><th></th>${headers.map(h => `<th class="num" title="${esc(h[1] || "")}">${esc(h[0])}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(r => `<tr><td><span style="display:inline-flex;align-items:center;gap:6px">${sw(r.gender)}${esc(r.label)}</span></td>${r.vals.map((v, i) =>
+      `<td class="num heat"><i style="opacity:${Number.isFinite(v) ? (v / max[i]) * .35 : 0}"></i><b>${fmt(v, digits)}</b></td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderLanguage() {
+  const g = game(), pane = document.getElementById("pane-language");
+  const chars = visibleChars();
+  if (!g.hasFeatures) {
+    pane.innerHTML = `<div class="empty">The corpus release has no precomputed pronoun, question-word or keyword tables for <b>${esc(g.label)}</b>.
+      You can still compare characters by amount of dialogue (Characters tab), or load the game's full script on the Full script tab.</div>`;
+    return;
+  }
+  const withF = chars.filter(c => c.pr);
+  const groups = GENDERS.filter(x => withF.some(c => c.g === x));
+  const qcols = C.questionCols;
+  const custom = !!g.custom;
+
+  const gRows = groups.map(x => {
+    const m = withF.filter(c => c.g === x), w = sumBy(m, c => c.s[1]);
+    const pr = PRONOUN_SETS.map((_, i) => sumBy(m, c => pronounRates(c.pr, 1)[i] / 1000) / w * 1000);
+    const q = qcols.map((_, i) => sumBy(m, c => c.qw ? c.qw[i] : 0) / w * 1000);
+    const st = STYLE_MARKERS.map((_, i) => sumBy(m, c => c.st ? c.st[i] : 0) / w * 1000);
+    return { label: `${x} (${m.length})`, gender: x, pr, q, st, w };
+  });
+
+  let picked = [...state.compareSet].map(n => withF.find(c => c.n === n)).filter(Boolean);
+  const auto = !picked.length;
+  if (auto) picked = withF.filter(c => c.s[1] >= state.minWords).slice(0, 12);
+  const cRows = picked.map(c => ({
+    label: c.n, gender: c.g,
+    vals: [...pronounRates(c.pr, c.s[1]), sumBy(qcols.map((_, i) => i), i => c.qw ? c.qw[i] : 0) / c.s[1] * 1000, charStats(c).wpl, charStats(c).wps],
+  }));
+  const hasStyle = withF.some(c => c.st);
+  const stRows = hasStyle ? picked.map(c => ({ label: c.n, gender: c.g, vals: STYLE_MARKERS.map((_, i) => (c.st ? c.st[i] : 0) / c.s[1] * 1000) })) : [];
+
+  const opts = groupOptions(withF.filter(c => c.kw), true);
+  if (!opts.some(o => o[0] === state.cmpA)) state.cmpA = opts[0] ? opts[0][0] : "";
+  if (state.cmpB !== "__REST" && !opts.some(o => o[0] === state.cmpB)) state.cmpB = opts[1] ? opts[1][0] : "__REST";
+  const hideStop = custom ? true : state.cmpHideStop;
+
+  pane.innerHTML = `
+    <p class="note" style="max-width:80ch">${custom
+      ? "Counts were made when this script was added. Rates are per 1,000 words so groups of different size can be compared."
+      : "These counts come from the corpus authors' precomputed tables. They count a fixed set of words: 11 pronouns, 6 question words, and 200 keywords that most separate male and female speech across the whole corpus. Rates are per 1,000 words so groups of different size can be compared."}</p>
+    <div class="section">
+      <div class="section-head"><h3>Pronouns by gender</h3><span class="note">per 1,000 words</span></div>
+      ${heatTable(PRONOUN_SETS.map(p => [p[0]]), gRows.map(r => ({ label: r.label, gender: r.gender, vals: r.pr })), 1)}
+      <p class="note">Talking about yourself (I/me/my), addressing others (you), or talking about third parties (he/she/they) can point to who drives the conversation and who gets talked about.</p>
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>Question words by gender</h3><span class="note">per 1,000 words</span></div>
+      ${heatTable(qcols.map(q => [q]), gRows.map(r => ({ label: r.label, gender: r.gender, vals: r.q })), 2)}
+    </div>
+    ${hasStyle ? `<div class="section">
+      <div class="section-head"><h3>Speech style by gender</h3><span class="note">per 1,000 words · hover a column for the words counted</span></div>
+      ${heatTable(STYLE_MARKERS.map(m => [m[0], m[1]]), gRows.map(r => ({ label: r.label, gender: r.gender, vals: r.st })), 1)}
+    </div>` : ""}
+    <div class="section">
+      <div class="section-head"><h3>Characters side by side</h3>
+        <button class="btn small" id="copyCmp">Copy as CSV</button></div>
+      <p class="note">${auto ? `Showing the ${picked.length} biggest speakers with at least ${state.minWords} words. Tick "Compare" on the Characters tab to choose your own.` : `Showing the ${picked.length} characters you picked on the Characters tab.`}</p>
+      ${cRows.length ? heatTable([...PRONOUN_SETS.map(p => [p[0], "per 1,000 words"]), ["questions", "who/what/why/where/when/how per 1,000 words"], ["words / line"], ["words / sentence"]], cRows, 1) : '<div class="empty">No characters match. Lower the minimum words setting or change the gender filter.</div>'}
+      ${stRows.length ? heatTable(STYLE_MARKERS.map(m => [m[0], m[1]]), stRows, 1) : ""}
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>${custom ? "Distinctive words" : "Which keywords lean one way?"}</h3></div>
+      <div class="toolbar"><span>Compare</span>${selectHTML("cmpA", opts, state.cmpA)}<span>with</span>${selectHTML("cmpB", opts, state.cmpB, true)}
+        ${custom ? "" : `<label class="chip"><input type="checkbox" id="cmpStop" ${state.cmpHideStop ? "checked" : ""}>Hide function words</label>`}</div>
+      <div id="cmpOut"></div>
+      <p class="note">Ranked by log-likelihood (G²): higher means the difference is less likely to be chance. Above about 3.84 is roughly p &lt; .05 and above 10.83 roughly p &lt; .001. ${custom
+        ? "Every word in the script is counted, except words a character used only once (left out to save space). Character and place names often top the list. Look past them for words about emotion, relationships, bodies, violence or care."
+        : "Only the corpus's 200 keywords are counted here; load the full script for every word."}</p>
+    </div>`;
+
+  const runCmp = () => {
+    const kwChars = withF.filter(c => c.kw);
+    const A = pickMembers(state.cmpA, kwChars, []);
+    const B = pickMembers(state.cmpB, kwChars, A);
+    const merge = list => { const o = {}; list.forEach(c => Object.entries(c.kw).forEach(([w, n]) => { o[w] = (o[w] || 0) + n; })); return o; };
+    const out = document.getElementById("cmpOut");
+    const aw = sumBy(A, c => c.s[1]), bw = sumBy(B, c => c.s[1]);
+    if (!aw || !bw) { out.innerHTML = `<div class="empty">One side of the comparison has no characters. Pick different groups or widen the gender filter.</div>`; return; }
+    const k = keyness(merge(A), aw, merge(B), bw, 5, hideStop);
+    out.innerHTML = keynessHTML(k, labelOf(opts, state.cmpA), state.cmpB === "__REST" ? "Everyone else" : labelOf(opts, state.cmpB), aw, bw);
+  };
+  pane.querySelector("#cmpA").addEventListener("change", e => { state.cmpA = e.target.value; runCmp(); });
+  pane.querySelector("#cmpB").addEventListener("change", e => { state.cmpB = e.target.value; runCmp(); });
+  const cs = pane.querySelector("#cmpStop");
+  if (cs) cs.addEventListener("change", e => { state.cmpHideStop = e.target.checked; renderLanguage(); });
+  pane.querySelector("#copyCmp").addEventListener("click", () => copyText(toCSV([
+    ["character", "gender", ...PRONOUN_SETS.map(p => p[0] + " per 1000"), "question words per 1000", "words per line", "words per sentence", ...(hasStyle ? STYLE_MARKERS.map(m => m[0] + " per 1000") : [])],
+    ...cRows.map((r, i) => [r.label, r.gender, ...r.vals.map(v => v.toFixed(2)), ...(hasStyle ? stRows[i].vals.map(v => v.toFixed(2)) : [])])]), "Comparison"));
+  runCmp();
+}
+function labelOf(opts, v) { const o = opts.find(x => x[0] === v); return o ? o[1] : v; }
+function keynessHTML(k, la, lb, aw, bw) {
+  const col = (list, side, label, total) => `<div class="section"><h3>More typical of ${esc(label)}</h3>
+    <p class="note">${fmt(total)} words</p>
+    ${list.length ? `<div class="tbl-wrap" style="max-height:420px"><table><thead><tr><th>Word</th><th class="num">n</th><th class="num" title="Uses per 10,000 words in this group">/10k</th><th class="num" title="Uses per 10,000 words in the other group">/10k other</th><th class="num">G²</th></tr></thead>
+    <tbody>${list.map(o => `<tr><td>${esc(o.w)}</td><td class="num">${side === "A" ? o.a : o.b}</td><td class="num">${fmt(side === "A" ? o.ra : o.rb, 1)}</td><td class="num">${fmt(side === "A" ? o.rb : o.ra, 1)}</td><td class="num">${fmt(o.g2, 1)}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">No words pass the minimum frequency.</div>'}</div>`;
+  return `<div class="compare-cols">${col(k.A, "A", la, aw)}${col(k.B, "B", lb, bw)}</div>`;
+}
+
+// ---------- full script ----------
+function mergeCounts(list) {
+  const counts = {}; let words = 0;
+  list.forEach(v => { words += v.words; for (const w in v.counts) counts[w] = (counts[w] || 0) + v.counts[w]; });
+  return { counts, words };
+}
+function genderLookup(g) {
+  const map = {};
+  Object.entries(g.groups || {}).forEach(([grp, names]) => {
+    const gen = GROUP_TO_GENDER[grp];
+    (names || []).forEach(n => { if (gen && !map[n]) map[n] = gen; });
+  });
+  g.chars.forEach(c => { if (!map[c.n] || map[c.n] === "Other") map[c.n] = c.g; });
+  return map;
+}
+function scriptFromLines(lines, g) {
+  const gmap = genderLookup(g);
+  const smap = g.custom ? g.custom.speakerMap : null;
+  const byChar = {}, all = [];
+  lines.forEach(([spk0, text]) => {
+    const spk = mapSpeaker(smap, spk0);
+    if (!spk) return;
+    const rec = byChar[spk] || (byChar[spk] = { g: gmap[spk] || "Other", coded: !!gmap[spk], lines: [], counts: {}, words: 0, text: "" });
+    rec.lines.push(text);
+    const toks = tokenize(text);
+    rec.words += toks.length;
+    toks.forEach(w => { rec.counts[w] = (rec.counts[w] || 0) + 1; });
+    all.push([spk, text]);
+  });
+  Object.values(byChar).forEach(r => { r.text = r.lines.join("\n").toLowerCase(); });
+  return { byChar, all, gameId: g.id };
+}
+
+function renderScript() {
+  const g = game(), pane = document.getElementById("pane-script");
+  const sc = state.scripts[g.id];
+  document.getElementById("scriptBadge").textContent = sc ? "loaded" : "";
+  if (!sc) {
+    pane.innerHTML = `
+      <div class="section">
+        <h3>Load the dialogue for ${esc(g.label)}</h3>
+        <p style="max-width:75ch;margin:0">${g.custom
+          ? "Scripts added by the class are stored as counts only. To search the actual lines, load the same script file that was used to add this game. It is read with the same settings and speaker names."
+          : "The corpus does not share game scripts directly. It ships a small program for each game that downloads the script from its public source and converts it into a <code>data.json</code> file."}
+          Once loaded, you can search words and phrases, see every line in context, and compare speech style. The file stays in your browser.</p>
+      </div>
+      <div class="drop" id="drop">
+        <strong>Drop the script file here</strong>
+        <span class="note">${g.custom ? ".txt, .csv, .tsv or .json" : "data.json"}</span>
+        <label class="btn primary" style="display:inline-block;cursor:pointer">Choose file<input type="file" id="fileIn" accept=".json,.txt,.csv,.tsv,application/json,text/plain,text/csv" hidden></label>
+        <span class="note" id="loadMsg"></span>
+      </div>
+      ${g.custom ? "" : `<div class="section">
+        <h3>How to build the file (one-time, needs Python 3)</h3>
+        <ol class="steps">
+          <li>Download the corpus: <a href="https://github.com/seannyD/VideoGameDialogueCorpusPublic/archive/refs/heads/main.zip" target="_blank" rel="noopener">zip from GitHub</a>, then unzip it.</li>
+          <li>Install the helper packages:<pre class="cmd">pip3 install bs4 html5lib cssutils lxml numpy "xlrd==1.2.0" hjson xlsxwriter pyyaml textatistic igraph requests</pre></li>
+          <li>Download this game's raw script:<pre class="cmd">cd VideoGameDialogueCorpusPublic/data/${esc(g.id)}
+python3 scraper.py</pre></li>
+          <li>Convert it into the corpus format:<pre class="cmd">cd ../../../processing
+python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
+          <li>Load <code>VideoGameDialogueCorpusPublic/data/${esc(g.id)}/data.json</code> above.</li>
+        </ol>
+        <p class="note">Scrapers fetch from fan sites and wikis and can take minutes to hours. Some sources may have moved since the corpus was built.</p>
+      </div>`}`;
+    const inp = pane.querySelector("#fileIn"), drop = pane.querySelector("#drop");
+    const handle = file => {
+      const msg = pane.querySelector("#loadMsg");
+      if (!file) return;
+      msg.textContent = `Reading ${file.name}…`;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const opts = g.custom ? g.custom.importOpts : { format: "json" };
+          const parsed = parseInput(r.result, file.name, opts);
+          if (!parsed.lines.length) throw new Error("no dialogue lines found");
+          const s = scriptFromLines(parsed.lines, g);
+          if (g.custom) {
+            const known = new Set(g.chars.map(c => c.n));
+            const matched = s.all.filter(([n]) => known.has(n)).length / s.all.length;
+            if (matched < .5) throw new Error("its speakers don't match this game. Check that it's the same file used to add the game");
+          }
+          state.scripts[g.id] = s; renderScript(); renderDetail();
+        } catch (e) { msg.textContent = `Could not use that file: ${e.message}.`; }
+      };
+      r.readAsText(file);
+    };
+    inp.addEventListener("change", () => handle(inp.files[0]));
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); handle(e.dataTransfer.files[0]); });
+    return;
+  }
+
+  const entries = Object.entries(sc.byChar).filter(([, v]) => state.genders.has(v.g));
+  const totalLines = sc.all.length, coded = Object.values(sc.byChar).filter(v => v.coded);
+  const codedLines = coded.reduce((s, v) => s + v.lines.length, 0);
+  const uncoded = Object.entries(sc.byChar).filter(([, v]) => !v.coded).sort((a, b) => b[1].lines.length - a[1].lines.length).slice(0, 12);
+
+  const markerRate = (texts, words) => STYLE_MARKERS.map(m => m[2](texts) / words * 1000);
+  const groups = GENDERS.filter(x => entries.some(([, v]) => v.g === x));
+  const gRows = groups.map(x => {
+    const m = entries.filter(([, v]) => v.g === x); const w = m.reduce((s, [, v]) => s + v.words, 0);
+    return { label: `${x} (${m.length})`, gender: x, vals: w ? markerRate(m.map(([, v]) => v.text).join("\n"), w) : STYLE_MARKERS.map(() => NaN) };
+  });
+  let pickedNames = [...state.compareSet].filter(n => sc.byChar[n] && state.genders.has(sc.byChar[n].g));
+  if (!pickedNames.length) pickedNames = entries.filter(([, v]) => v.words >= state.minWords).sort((a, b) => b[1].words - a[1].words).slice(0, 12).map(([n]) => n);
+  const cRows = pickedNames.map(n => ({ label: n, gender: sc.byChar[n].g, vals: markerRate(sc.byChar[n].text, sc.byChar[n].words) }));
+
+  const pseudo = entries.map(([n, v]) => ({ n, g: v.g, s: [v.lines.length, v.words, 0, 0] })).sort((a, b) => b.s[1] - a.s[1]);
+  const opts = groupOptions(pseudo, true);
+  if (!opts.some(o => o[0] === state.ftA)) state.ftA = opts[0] ? opts[0][0] : "";
+  if (state.ftB !== "__REST" && !opts.some(o => o[0] === state.ftB)) state.ftB = opts[1] ? opts[1][0] : "__REST";
+
+  pane.innerHTML = `
+    <div class="section">
+      <div class="section-head"><h3>Script loaded</h3><button class="btn small" id="unload">Remove script</button></div>
+      <div class="tiles">
+        <div class="tile"><div class="v">${fmt(totalLines)}</div><div class="k">lines of dialogue</div></div>
+        <div class="tile"><div class="v">${fmt(Object.keys(sc.byChar).length)}</div><div class="k">different speakers</div></div>
+        <div class="tile"><div class="v">${pct(codedLines / totalLines)}</div><div class="k">of lines from gender-coded speakers</div></div>
+      </div>
+      ${uncoded.length ? `<p class="note">Speakers without a gender code count as "Other": ${uncoded.map(([n, v]) => `${esc(n)} (${v.lines.length})`).join(", ")}${Object.values(sc.byChar).filter(v => !v.coded).length > 12 ? "…" : ""}</p>` : ""}
+      <p class="note">Dialogue inside player-choice branches is counted once per option, so games with many choices can over-count the player character.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>Search the dialogue</h3></div>
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="A word or phrase, e.g. sorry, i think, beautiful" value="${esc(state.search)}" aria-label="Search the dialogue">
+        <button class="btn primary" id="qGo">Search</button>
+      </div>
+      <div id="qOut"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>Speech style by gender</h3><span class="note">per 1,000 words · hover a column for the words counted</span></div>
+      ${gRows.length ? heatTable(STYLE_MARKERS.map(m => [m[0], m[1]]), gRows, 1) : '<div class="empty">No speakers match the gender filter.</div>'}
+    </div>
+    <div class="section">
+      <div class="section-head"><h3>Speech style by character</h3><button class="btn small" id="copyStyle">Copy as CSV</button></div>
+      <p class="note">${state.compareSet.size ? "Characters you picked on the Characters tab." : `The ${cRows.length} biggest speakers with at least ${state.minWords} words. Tick "Compare" on the Characters tab to choose your own.`}</p>
+      ${cRows.length ? heatTable(STYLE_MARKERS.map(m => [m[0], m[1]]), cRows, 1) : '<div class="empty">No characters match.</div>'}
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h3>Distinctive words</h3></div>
+      <div class="toolbar"><span>Compare</span>${selectHTML("ftA", opts, state.ftA)}<span>with</span>${selectHTML("ftB", opts, state.ftB, true)}
+        <label class="chip"><input type="checkbox" id="ftStop" ${state.ftHideStop ? "checked" : ""}>Hide function words</label></div>
+      <div id="ftOut"></div>
+      <p class="note">Every word in the script, ranked by log-likelihood (G²). Character and place names often top the list. Look past them for words about emotion, relationships, bodies, violence or care.</p>
+    </div>`;
+
+  pane.querySelector("#unload").addEventListener("click", () => { delete state.scripts[g.id]; renderScript(); renderDetail(); });
+  pane.querySelector("#copyStyle").addEventListener("click", () => copyText(toCSV([["character", "gender", ...STYLE_MARKERS.map(m => m[0] + " per 1000")], ...cRows.map(r => [r.label, r.gender, ...r.vals.map(v => v.toFixed(2))])]), "Speech style table"));
+
+  const runFt = () => {
+    const A = pickMembers(state.ftA, pseudo, []), B = pickMembers(state.ftB, pseudo, A);
+    const a = mergeCounts(A.map(c => sc.byChar[c.n])), b = mergeCounts(B.map(c => sc.byChar[c.n]));
+    const out = document.getElementById("ftOut");
+    if (!a.words || !b.words) { out.innerHTML = `<div class="empty">One side of the comparison has no dialogue. Pick different groups or widen the gender filter.</div>`; return; }
+    out.innerHTML = keynessHTML(keyness(a.counts, a.words, b.counts, b.words, 5, state.ftHideStop), labelOf(opts, state.ftA), state.ftB === "__REST" ? "Everyone else" : labelOf(opts, state.ftB), a.words, b.words);
+  };
+  pane.querySelector("#ftA").addEventListener("change", e => { state.ftA = e.target.value; runFt(); });
+  pane.querySelector("#ftB").addEventListener("change", e => { state.ftB = e.target.value; runFt(); });
+  pane.querySelector("#ftStop").addEventListener("change", e => { state.ftHideStop = e.target.checked; runFt(); });
+  runFt();
+
+  const runSearch = () => {
+    const q = pane.querySelector("#q").value.trim(); state.search = q;
+    const out = document.getElementById("qOut");
+    if (!q) { out.innerHTML = ""; return; }
+    const pat = q.toLowerCase().replace(/[’‘]/g, "'").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    const re = new RegExp(`\\b${pat}\\b`, "gi");
+    const per = entries.map(([n, v]) => ({ n, g: v.g, hits: count(v.text.replace(/[’‘]/g, "'"), re), words: v.words })).filter(x => x.words);
+    const byG = groups.map(x => { const m = per.filter(p => p.g === x); const h = m.reduce((s, p) => s + p.hits, 0), w = m.reduce((s, p) => s + p.words, 0); return { g: x, h, rate: w ? h / w * 10000 : 0 }; });
+    const maxR = Math.max(...byG.map(x => x.rate), 1e-9);
+    const topChars = per.filter(p => p.hits).sort((a, b) => b.hits - a.hits).slice(0, 10);
+    const hitsTotal = per.reduce((s, p) => s + p.hits, 0);
+    const conc = [];
+    for (const [spk, text] of sc.all) {
+      if (conc.length >= 300) break;
+      const v = sc.byChar[spk];
+      if (!state.genders.has(v.g)) continue;
+      re.lastIndex = 0;
+      if (re.test(text.replace(/[’‘]/g, "'"))) conc.push([spk, v.g, text]);
+    }
+    const hl = t => esc(t.replace(/[’‘]/g, "'")).replace(new RegExp(`\\b(${pat.replace(/'/g, "(?:'|&#39;)")})\\b`, "gi"), "<mark>$1</mark>");
+    out.innerHTML = !hitsTotal ? `<div class="empty">"${esc(q)}" does not appear in the dialogue of the characters shown.</div>` : `
+      <div class="two">
+        <div class="section"><h3>Uses per 10,000 words</h3><div class="bars">${byG.map(x => `<div class="bar-row"><span class="name">${sw(x.g)} ${x.g}</span><span class="track"><span class="fill" style="display:block;width:${x.rate / maxR * 100}%;background:${gcol(x.g)}"></span></span><span class="val">${fmt(x.rate, 1)} (${x.h})</span></div>`).join("")}</div></div>
+        <div class="section"><h3>Who says it most</h3><div class="bars">${topChars.map(p => `<div class="bar-row"><span class="name">${esc(p.n)}</span><span class="track"><span class="fill" style="display:block;width:${p.hits / topChars[0].hits * 100}%;background:${gcol(p.g)}"></span></span><span class="val">${p.hits}</span></div>`).join("")}</div></div>
+      </div>
+      <div class="section"><div class="section-head"><h3>In context</h3><span class="note">${conc.length >= 300 ? "first 300 lines" : conc.length + " lines"} in script order</span>
+        <button class="btn small" id="copyConc">Copy lines</button></div>
+        <div class="kwic">${conc.map(([s, gg, t]) => `<div><span class="spk" style="color:${gcol(gg)}" title="${esc(s)}">${esc(s)}</span><span>${hl(t)}</span></div>`).join("")}</div></div>`;
+    const cc = out.querySelector("#copyConc");
+    if (cc) cc.addEventListener("click", () => copyText(toCSV([["speaker", "gender", "line"], ...conc.map(([s, gg, t]) => [s, gg, t])]), "Lines"));
+  };
+  pane.querySelector("#qGo").addEventListener("click", runSearch);
+  pane.querySelector("#q").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+  if (state.search) runSearch();
+}
+
+// ---------- add a game ----------
+const imp = {
+  text: "", fileName: "", opts: { format: "auto", strip: true, join: true, spkCol: -1, txtCol: -1 },
+  parsed: null, speakers: [], spkFilter: "", showAll: false, gde: null,
+  meta: { title: "", series: "", year: "", source: "", sourceType: "fan transcript", completeness: "partial", notes: "" },
+  saving: false, msg: "",
+};
+function buildSpeakers() {
+  // Merge case variants (ARTHUR / Arthur) under the most common spelling.
+  const groups = {};
+  imp.parsed.lines.forEach(([spk, t]) => {
+    const k = spk.toLowerCase();
+    const gr = groups[k] || (groups[k] = { key: k, forms: {}, lines: 0, words: 0 });
+    gr.forms[spk] = (gr.forms[spk] || 0) + 1; gr.lines++; gr.words += tokenize(t).length;
+  });
+  const prev = {}; imp.speakers.forEach(s => { prev[s.key] = s; });
+  imp.speakers = Object.values(groups).map(gr => {
+    const name = Object.entries(gr.forms).sort((a, b) => b[1] - a[1])[0][0];
+    const p = prev[gr.key];
+    return { key: gr.key, name, lines: gr.lines, words: gr.words, gender: p ? p.gender : "", pc: p ? p.pc : false, ignore: p ? p.ignore : false, rename: p ? p.rename : "" };
+  }).sort((a, b) => b.lines - a.lines);
+}
+function readImport() {
+  imp.msg = ""; imp.gde = null;
+  if (!imp.text.trim()) { imp.parsed = null; imp.speakers = []; imp.msg = "Paste a script or choose a file first."; renderAddPane(); return; }
+  try {
+    const p = parseInput(imp.text, imp.fileName, imp.opts);
+    if (p.format === "gde") { imp.gde = p.record; imp.parsed = null; imp.speakers = []; renderAddPane(); return; }
+    imp.parsed = p;
+    buildSpeakers();
+    if (!p.lines.length) imp.msg = p.headers ? "Pick which columns hold the speaker and the line." : "No dialogue lines found. Each line should look like  Name: what they say";
+  } catch (e) { imp.parsed = null; imp.speakers = []; imp.msg = "Could not read this as " + (imp.opts.format === "auto" ? "a script" : imp.opts.format) + ": " + e.message; }
+  renderAddPane();
+}
+function buildRecord() {
+  const map = {};
+  imp.speakers.forEach(s => { map[s.key] = s.ignore ? null : (s.rename.trim() || s.name); });
+  const info = {};
+  imp.speakers.forEach(s => {
+    if (s.ignore) return;
+    const n = map[s.key];
+    const i = info[n] || (info[n] = { gender: "", pc: false });
+    if (!i.gender && s.gender) i.gender = s.gender;
+    i.pc = i.pc || s.pc;
+  });
+  const acc = {};
+  imp.parsed.lines.forEach(([spk, t]) => {
+    const n = map[spk.toLowerCase()];
+    if (!n) return;
+    const a = acc[n] || (acc[n] = { lines: 0, words: 0, sent: 0, syl: 0, kw: {}, text: [] });
+    const toks = tokenize(t);
+    a.lines++; a.words += toks.length; a.sent += Math.max(1, count(t, /[.!?]+(?=\s|$)/g)); a.syl += toks.reduce((s, w) => s + syllables(w), 0);
+    toks.forEach(w => { a.kw[w] = (a.kw[w] || 0) + 1; });
+    a.text.push(t.toLowerCase());
+  });
+  const pcols = C.pronounCols, qcols = C.questionCols;
+  const chars = Object.entries(acc).filter(([, a]) => a.words).map(([n, a]) => {
+    const text = a.text.join("\n");
+    const kw = {};
+    // Words a big talker said only once are dropped to keep the stored record small.
+    Object.entries(a.kw).forEach(([w, k]) => { if (k >= 2 || a.words < 400) kw[w] = k; });
+    const top = Object.entries(kw).sort((x, y) => y[1] - x[1]).slice(0, 4000);
+    return {
+      n, g: info[n].gender || "Other", grp: info[n].gender ? [] : ["not coded"],
+      s: [a.lines, a.words, a.sent, a.syl],
+      pr: pcols.map(w => a.kw[w] || 0), qw: qcols.map(w => a.kw[w] || 0),
+      st: STYLE_MARKERS.map(m => m[2](text)),
+      kw: Object.fromEntries(top),
+    };
+  });
+  const m = imp.meta;
+  const gid = slug(m.title) + "-" + Date.now().toString(36);
+  return finishRecord({
+    id: "local:" + gid, title: m.title.trim(), series: m.series.trim() || m.title.trim(), year: +m.year || null,
+    source: m.source.trim(), sourceType: m.sourceType, completeness: m.completeness, choices: "",
+    pcs: Object.entries(info).filter(([, i]) => i.pc).map(([n]) => n), groups: {}, chars,
+    custom: { where: "local", gid, addedAt: Date.now(), notes: m.notes.trim(), importOpts: Object.assign({}, imp.opts, { format: imp.parsed.format === "json-table" ? "json" : imp.parsed.format === "table" ? "table" : imp.parsed.format }),
+      speakerMap: map, totals: { lines: chars.reduce((s, c) => s + c.s[0], 0), words: chars.reduce((s, c) => s + c.s[1], 0) } },
+  });
+}
+async function saveRecord(rec, where) {
+  imp.saving = true; imp.msg = ""; renderAddPane();
+  try {
+    if (where === "class") {
+      rec.custom.where = "class"; rec.custom.uid = lib.uid;
+      const dropped = await saveToClass(rec);
+      rec.id = `class:${lib.uid}:${rec.custom.gid}`;
+      loadedClass[rec.id] = rec;
+      if (dropped) toast(`Saved. ${dropped} of the smallest speakers were left out to fit the library.`);
+      else toast("Saved to the class library");
+    } else {
+      rec.custom.where = "local"; rec.id = "local:" + rec.custom.gid;
+      await idbPut(rec);
+      localGames[rec.id] = rec;
+      toast("Saved in this browser");
+    }
+    if (imp.parsed) state.scripts[rec.id] = scriptFromLines(imp.parsed.lines, rec);
+    if (where === "class") lib.classIndex[lib.uid] = Object.assign({}, lib.classIndex[lib.uid], { [rec.custom.gid]: { title: rec.title, series: rec.series, year: rec.year, addedAt: rec.custom.addedAt } });
+    refreshGames();
+    imp.text = ""; imp.fileName = ""; imp.parsed = null; imp.speakers = []; imp.gde = null;
+    imp.meta = { title: "", series: "", year: "", source: "", sourceType: "fan transcript", completeness: "partial", notes: "" };
+    imp.saving = false;
+    setGame(rec.id);
+    renderAddPane();
+  } catch (e) {
+    imp.saving = false; imp.msg = where === "class" ? dbErrorText(e) : "Could not save in this browser. It may be in private mode or have storage turned off. Try saving a game file instead.";
+    renderAddPane();
+  }
+}
+async function exportRecord(rec) {
+  const data = JSON.stringify({ format: "gde-game", version: 1, record: Object.assign({}, rec, { id: undefined }) });
+  const filename = slug(rec.title) + ".game.json";
+  if (!lib.downloads) {
+    // Outside Claude (e.g. GitHub Pages) a plain browser download works.
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    return;
+  }
+  try { await lib.downloads.save({ filename, data }); } catch (e) { if (e && e.code !== "declined") toast("Could not save the file"); }
+}
+
+function libraryStatusHTML() {
+  if (lib.status === "offline") return `<p class="note">Games you add are saved in this browser. To share one with classmates or your instructor, save it as a game file and send it to them; they load it in step 1.</p>`;
+  if (lib.status === "connecting" || lib.status === "loading") return `<p class="note">Connecting to the class library…</p>`;
+  if (lib.status === "slow") return `<div class="warnbox">The class library can't be reached yet. You can keep working; saving to it may fail until it connects.</div>`;
+  if (lib.status === "error") return `<div class="warnbox">The class library could not be loaded (${esc(lib.error || "unknown error")}).</div>`;
+  if (lib.canWrite === false || lib.readOnly) return `<div class="warnbox">You can view games in the class library but not add to it. Save the game in this browser or as a file, and send the file to your instructor to add.</div>`;
+  return "";
+}
+
+function renderAddPane() {
+  const pane = document.getElementById("pane-add");
+  if (!pane) return;
+  const active = document.activeElement && pane.contains(document.activeElement) ? document.activeElement.id : null;
+  const p = imp.parsed;
+  const canClass = lib.db && lib.status === "ready" && lib.uid && lib.canWrite !== false && !lib.readOnly;
+  const nLines = p ? p.lines.length : 0;
+  const coded = imp.speakers.filter(s => !s.ignore && s.gender);
+  const codedLines = coded.reduce((s, x) => s + x.lines, 0), keptLines = imp.speakers.filter(s => !s.ignore).reduce((s, x) => s + x.lines, 0);
+  const f = imp.spkFilter.toLowerCase();
+  let spk = imp.speakers.filter(s => !f || s.name.toLowerCase().includes(f) || s.rename.toLowerCase().includes(f));
+  const total = spk.length;
+  if (!imp.showAll) spk = spk.slice(0, 150);
+  const ready = p && nLines && imp.meta.title.trim();
+
+  pane.innerHTML = `
+    <div class="section">
+      <h2>Add a game script</h2>
+      <p style="max-width:78ch;margin:0">Bring in dialogue from any game: a fan transcript, a wiki page, subtitles, a datamined spreadsheet, or lines your group typed up while playing. Tag each speaker's gender, then save. The tool keeps word counts and statistics, not the script text, so the game works in every tab except Full script search.</p>
+      ${libraryStatusHTML()}
+    </div>
+
+    <div class="step">
+      <div class="step-title"><span class="num">1</span><h3>Bring in the script</h3></div>
+      <div class="two">
+        <div class="field">
+          <div class="drop" id="impDrop">
+            <strong>Drop a script file here</strong>
+            <span class="note">.txt, .csv, .tsv, .json, or a .game.json file a classmate sent you</span>
+            <label class="btn primary" style="display:inline-block;cursor:pointer">Choose file<input type="file" id="impFile" accept=".txt,.csv,.tsv,.json,text/plain,text/csv,application/json" hidden></label>
+            ${imp.fileName ? `<span class="note">Loaded: ${esc(imp.fileName)}</span>` : ""}
+          </div>
+          <label class="lbl" for="impText">…or paste the script</label>
+          <textarea id="impText" rows="8" placeholder="ARTHUR: We need to get out of here.&#10;SADIE: Then move!&#10;DUTCH: I have a plan.">${esc(imp.fileName ? "" : imp.text)}</textarea>
+        </div>
+        <div class="field" style="align-content:start">
+          <label class="lbl" for="impFormat">Script layout</label>
+          <select id="impFormat">
+            ${[["auto", "Detect automatically"], ["colon", "Transcript: Name: line"], ["table", "Spreadsheet: CSV or TSV"], ["json", "JSON (corpus data.json or a list of rows)"]].map(([v, l]) => `<option value="${v}" ${imp.opts.format === v ? "selected" : ""}>${l}</option>`).join("")}
+          </select>
+          <label class="chip"><input type="checkbox" id="impStrip" ${imp.opts.strip ? "checked" : ""}>Remove [stage directions] and (asides)</label>
+          <label class="chip"><input type="checkbox" id="impJoin" ${imp.opts.join ? "checked" : ""}>Lines with no name continue the previous speaker</label>
+          <div class="toolbar"><button class="btn primary" id="impRead">Read script</button><button class="btn" id="impSample">Try an example</button></div>
+          <p class="note">Transcripts work best with one line per speech, the speaker's name, a colon, then the words. Bracketed lines such as [Cutscene] are skipped.</p>
+        </div>
+      </div>
+      ${imp.msg ? `<div class="warnbox">${esc(imp.msg)}</div>` : ""}
+    </div>
+
+    ${imp.gde ? `<div class="step">
+      <div class="step-title"><span class="num">2</span><h3>Game file: ${esc(imp.gde.title)}</h3></div>
+      <p class="note">${fmt((imp.gde.chars || []).length)} speakers, ${fmt(((imp.gde.custom || {}).totals || {}).words)} words. Gender coding and details come from the file.</p>
+      <div class="save-row">
+        ${lib.db ? `<button class="btn primary" id="gdeClass" ${canClass && !imp.saving ? "" : "disabled"}>Add to class library</button>` : ""}
+        <button class="btn ${lib.db ? "" : "primary"}" id="gdeLocal" ${imp.saving ? "disabled" : ""}>Save in this browser</button>
+      </div>
+    </div>` : ""}
+
+    ${p ? `<div class="step">
+      <div class="step-title"><span class="num">2</span><h3>Check what was read</h3></div>
+      ${p.headers ? `<div class="toolbar"><span>Speaker column</span><select id="colSpk">${p.headers.map((h, i) => `<option value="${i}" ${p.cols[0] === i ? "selected" : ""}>${esc(h || "column " + (i + 1))}</option>`).join("")}</select>
+        <span>Line column</span><select id="colTxt">${p.headers.map((h, i) => `<option value="${i}" ${p.cols[1] === i ? "selected" : ""}>${esc(h || "column " + (i + 1))}</option>`).join("")}</select></div>` : ""}
+      <div class="tiles">
+        <div class="tile"><div class="v">${fmt(nLines)}</div><div class="k">lines of dialogue</div></div>
+        <div class="tile"><div class="v">${fmt(imp.speakers.length)}</div><div class="k">speakers found</div></div>
+        <div class="tile"><div class="v">${fmt(imp.speakers.reduce((s, x) => s + x.words, 0))}</div><div class="k">words</div></div>
+      </div>
+      ${nLines ? `<div class="kwic" style="max-height:160px">${p.lines.slice(0, 6).map(([s, t]) => `<div><span class="spk">${esc(s)}</span><span>${esc(t.length > 160 ? t.slice(0, 160) + "…" : t)}</span></div>`).join("")}</div>
+      <p class="note">If names and lines look wrong, change the script layout above and read it again.</p>` : ""}
+    </div>
+
+    <div class="step">
+      <div class="step-title"><span class="num">3</span><h3>Game details</h3></div>
+      <div class="form-grid">
+        <div class="field"><label class="lbl" for="mTitle">Game title (required)</label><input type="text" id="mTitle" value="${esc(imp.meta.title)}" placeholder="e.g. Red Dead Redemption 2"></div>
+        <div class="field"><label class="lbl" for="mSeries">Series</label><input type="text" id="mSeries" value="${esc(imp.meta.series)}" placeholder="e.g. Red Dead"></div>
+        <div class="field"><label class="lbl" for="mYear">Release year</label><input type="number" id="mYear" value="${esc(imp.meta.year)}" min="1970" max="2100"></div>
+        <div class="field"><label class="lbl" for="mSource">Where the script came from</label><input type="text" id="mSource" value="${esc(imp.meta.source)}" placeholder="Link, or e.g. our own playthrough, ch. 1–3"></div>
+        <div class="field"><label class="lbl" for="mType">Source type</label><select id="mType">${["fan transcript", "wiki", "subtitles", "game data", "own transcription"].map(v => `<option ${imp.meta.sourceType === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+        <div class="field"><label class="lbl" for="mComp">How much of the game</label><select id="mComp">${[["sample", "A sample (a few scenes)"], ["partial", "Part of the game"], ["high", "Most or all of it"]].map(([v, l]) => `<option value="${v}" ${imp.meta.completeness === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><label class="lbl" for="mNotes">Notes for classmates</label><input type="text" id="mNotes" value="${esc(imp.meta.notes)}" placeholder="e.g. Main story only; side quests not included"></div>
+    </div>
+
+    <div class="step">
+      <div class="step-title"><span class="num">4</span><h3>Tag each speaker</h3></div>
+      <p class="note" style="max-width:80ch">Set a gender for every character you will analyse, using how the game presents them. Leave crowds and unnamed voices as Neutral, or tick Ignore for things that aren't characters (chapter titles, system messages). To merge two names for one character, type the same name in "Save as".</p>
+      <div class="toolbar">
+        <input type="search" id="spkFilter" placeholder="Find a speaker…" value="${esc(imp.spkFilter)}" aria-label="Find a speaker">
+        <span class="note" id="codedPct">${pct(keptLines ? codedLines / keptLines : 0)} of lines have a gender tag</span>
+      </div>
+      <div class="tbl-wrap" style="max-height:480px"><table>
+        <thead><tr><th>Speaker</th><th class="num">Lines</th><th class="num">Words</th><th>Gender</th><th>Player character</th><th>Ignore</th><th>Save as</th></tr></thead>
+        <tbody>${spk.map(s => `<tr class="${s.ignore ? "ignored" : ""}" data-key="${esc(s.key)}">
+          <td>${s.gender ? sw(s.gender) + " " : ""}${esc(s.name)}</td><td class="num">${fmt(s.lines)}</td><td class="num">${fmt(s.words)}</td>
+          <td><select data-f="gender" aria-label="Gender of ${esc(s.name)}"><option value="">Not tagged</option>${["Female", "Male", "Trans", "Neutral"].map(x => `<option ${s.gender === x ? "selected" : ""}>${x}</option>`).join("")}</select></td>
+          <td><input type="checkbox" data-f="pc" aria-label="${esc(s.name)} is a player character" ${s.pc ? "checked" : ""}></td>
+          <td><input type="checkbox" data-f="ignore" aria-label="Ignore ${esc(s.name)}" ${s.ignore ? "checked" : ""}></td>
+          <td><input type="text" data-f="rename" aria-label="Save ${esc(s.name)} as" value="${esc(s.rename)}" placeholder="${esc(s.name)}"></td></tr>`).join("")}</tbody>
+      </table></div>
+      ${total > spk.length ? `<button class="btn small" id="spkAll">Show all ${total} speakers</button>` : ""}
+    </div>
+
+    <div class="step">
+      <div class="step-title"><span class="num">5</span><h3>Save</h3></div>
+      <div class="save-row">
+        ${lib.db ? `<button class="btn primary" id="saveClass" ${ready && canClass && !imp.saving ? "" : "disabled"}>Add to class library</button>` : ""}
+        <button class="btn ${lib.db ? "" : "primary"}" id="saveLocal" ${ready && !imp.saving ? "" : "disabled"}>Save in this browser${lib.db ? " only" : ""}</button>
+        <button class="btn" id="saveFile" ${ready && !imp.saving ? "" : "disabled"}>Save as a game file</button>
+        ${imp.saving ? `<span class="note">Saving…</span>` : ""}
+      </div>
+      <p class="note">${!imp.meta.title.trim() ? "Add a game title to save. " : ""}${lib.db ? "Class library: everyone with the link sees the game. " : ""}This browser: only you, on this device. Game file: send it to your instructor or a group member, who can load it in step 1.</p>
+    </div>` : ""}`;
+
+  // wiring
+  const q = id => pane.querySelector("#" + id);
+  const readFile = file => {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => { imp.text = r.result; imp.fileName = file.name; imp.opts.spkCol = -1; imp.opts.txtCol = -1; readImport(); };
+    r.readAsText(file);
+  };
+  q("impFile").addEventListener("change", e => readFile(e.target.files[0]));
+  const drop = q("impDrop");
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); readFile(e.dataTransfer.files[0]); });
+  q("impText").addEventListener("input", e => { imp.text = e.target.value; imp.fileName = ""; });
+  q("impFormat").addEventListener("change", e => { imp.opts.format = e.target.value; imp.opts.spkCol = -1; imp.opts.txtCol = -1; if (imp.text) readImport(); });
+  q("impStrip").addEventListener("change", e => { imp.opts.strip = e.target.checked; if (imp.text) readImport(); });
+  q("impJoin").addEventListener("change", e => { imp.opts.join = e.target.checked; if (imp.text) readImport(); });
+  q("impRead").addEventListener("click", () => { if (!imp.fileName) imp.text = q("impText").value; readImport(); });
+  q("impSample").addEventListener("click", () => {
+    imp.text = SAMPLE_SCRIPT; imp.fileName = ""; imp.opts.format = "auto";
+    imp.meta = Object.assign({}, imp.meta, { title: "Example: Harbour Run", series: "Examples", year: "2026", source: "Made-up sample for practice", sourceType: "own transcription", completeness: "sample" });
+    readImport();
+  });
+  if (imp.gde) {
+    const rec = () => { const r = finishRecord(JSON.parse(JSON.stringify(imp.gde))); r.custom = Object.assign({}, r.custom, { gid: slug(r.title) + "-" + Date.now().toString(36), addedAt: Date.now() }); return r; };
+    if (q("gdeClass")) q("gdeClass").addEventListener("click", () => saveRecord(rec(), "class"));
+    q("gdeLocal").addEventListener("click", () => saveRecord(rec(), "local"));
+  }
+  if (!p) return;
+  if (p.headers) {
+    q("colSpk").addEventListener("change", e => { imp.opts.spkCol = +e.target.value; imp.opts.txtCol = p.cols[1]; readImport(); });
+    q("colTxt").addEventListener("change", e => { imp.opts.txtCol = +e.target.value; imp.opts.spkCol = p.cols[0]; readImport(); });
+  }
+  const metaFields = { mTitle: "title", mSeries: "series", mYear: "year", mSource: "source", mType: "sourceType", mComp: "completeness", mNotes: "notes" };
+  Object.entries(metaFields).forEach(([id, k]) => q(id).addEventListener(id === "mType" || id === "mComp" ? "change" : "input", e => {
+    imp.meta[k] = e.target.value;
+    if (k === "title") { const ok = !!e.target.value.trim(); ["saveClass", "saveLocal", "saveFile"].forEach(b => { const el = q(b); if (el) el.disabled = !ok || imp.saving || (b === "saveClass" && !canClass) || !nLines; }); }
+  }));
+  q("spkFilter").addEventListener("input", e => { imp.spkFilter = e.target.value; renderAddPane(); const n = pane.querySelector("#spkFilter"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+  const all = q("spkAll"); if (all) all.addEventListener("click", () => { imp.showAll = true; renderAddPane(); });
+  pane.querySelectorAll("tbody tr[data-key]").forEach(tr => {
+    const s = imp.speakers.find(x => x.key === tr.dataset.key);
+    tr.querySelectorAll("[data-f]").forEach(el => el.addEventListener(el.type === "text" ? "input" : "change", () => {
+      const fld = el.dataset.f;
+      s[fld] = el.type === "checkbox" ? el.checked : el.value;
+      // Update the row in place so keyboard focus stays where it is.
+      tr.classList.toggle("ignored", s.ignore);
+      tr.cells[0].innerHTML = (s.gender ? sw(s.gender) + " " : "") + esc(s.name);
+      const kept = imp.speakers.filter(x => !x.ignore), codedL = kept.filter(x => x.gender).reduce((a, x) => a + x.lines, 0), keptL = kept.reduce((a, x) => a + x.lines, 0);
+      q("codedPct").textContent = `${pct(keptL ? codedL / keptL : 0)} of lines have a gender tag`;
+    }));
+  });
+  const sc = q("saveClass"); if (sc) sc.addEventListener("click", () => saveRecord(buildRecord(), "class"));
+  const sl = q("saveLocal"); if (sl) sl.addEventListener("click", () => saveRecord(buildRecord(), "local"));
+  const sf = q("saveFile"); if (sf) sf.addEventListener("click", () => exportRecord(buildRecord()));
+  if (active) { const el = pane.querySelector("#" + CSS.escape(active)); if (el) el.focus(); }
+}
+
+// ---------- boot ----------
+function renderAll() {
+  buildGameSelect(document.getElementById("gameSearch").value);
+  const g = game();
+  if (g.stub) {
+    loadClassGame(g);
+    ["overview", "characters", "language", "script"].forEach(t => { document.getElementById("pane-" + t).innerHTML = `<div class="empty">Loading ${esc(g.title)} from the class library…</div>`; });
+    renderChips(); renderFacts(); renderAddPane();
+    return;
+  }
+  renderChips(); renderFacts(); renderOverview(); renderCharacters(); renderLanguage(); renderScript(); renderAddPane();
+}
+let startId = "Hades/Hades", startTab = "overview";
+try { startId = localStorage.getItem("gde-game") || startId; startTab = localStorage.getItem("gde-tab") || startTab; } catch (e) {}
+const hashTab = (location.hash || "").slice(1);
+if (["overview", "characters", "language", "script", "add"].includes(hashTab)) startTab = hashTab;
+refreshGames();
+state.gameId = byId[startId] && !startId.startsWith("class:") ? startId : "Hades/Hades";
+renderAll();
+setTab(startTab);
+idbAll().then(recs => {
+  recs.forEach(r => { localGames[r.id] = finishRecord(r); });
+  refreshGames();
+  if (byId[startId] && startId.startsWith("local:")) state.gameId = startId;
+  renderAll();
+}).catch(() => {});
+if (startId.startsWith("class:")) lib.pendingStart = startId;
+initLibrary();
+})();
+</script>
+</body>
+</html>

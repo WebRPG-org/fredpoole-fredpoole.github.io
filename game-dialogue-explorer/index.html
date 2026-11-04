@@ -314,6 +314,7 @@ footer p { margin: 0; }
 </div>
 
 <script src="corpus-data.js"></script>
+<script src="ready-made-games.js"></script>
 <script>
 (function () {
 "use strict";
@@ -384,6 +385,8 @@ builtIn.forEach(g => {
   g.hasFeatures = g.chars.some(c => c.pr || c.kw);
   g.fShare = shareFemale(g.chars);
 });
+// Games built into the tool from other sources (build_ready_made.py).
+const readyMade = (window.READY_MADE || []).map(finishRecord);
 let games = [];
 const byId = {};
 function refreshGames() {
@@ -393,7 +396,7 @@ function refreshGames() {
     classStubs.push(loadedClass[id] || { id, title: m.title, series: m.series || "", year: m.year, label: m.title, stub: true, custom: { where: "class", uid, gid, addedAt: m.addedAt } });
   }));
   const locals = Object.values(localGames);
-  games = [...builtIn, ...classStubs, ...locals];
+  games = [...builtIn, ...readyMade, ...classStubs, ...locals];
   Object.keys(byId).forEach(k => delete byId[k]);
   games.forEach(g => { byId[g.id] = g; });
 }
@@ -501,7 +504,7 @@ const ROW_TEXT_KEYS = ["dialogue", "text", "line", "utterance", "dialog", "conte
 function parseInput(text, fileName, opts) {
   const o = Object.assign({ format: "auto", strip: true, join: true, spkCol: -1, txtCol: -1 }, opts || {});
   const format = o.format === "auto" ? detectFormat(text, fileName) : o.format;
-  const strip = s => (o.strip ? s.replace(/\[[^\]]*\]|\([^)]*\)|\*[^*\n]+\*/g, " ") : s).replace(/\s+/g, " ").trim();
+  const strip = s => (o.strip ? s.replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\*/g, "") : s).replace(/\s+/g, " ").trim();
   const lines = [];
   if (format === "json") {
     const json = JSON.parse(text);
@@ -708,7 +711,8 @@ function buildGameSelect(filter) {
   const add = (key, g) => { (groups[key] = groups[key] || []).push(g); };
   games.forEach(g => {
     if (f && !(g.label + " " + g.series).toLowerCase().includes(f)) return;
-    if (g.custom && g.custom.where === "class") add("★ Class library", g);
+    if (g.custom && g.custom.where === "ready") add("★ Ready-made additions", g);
+    else if (g.custom && g.custom.where === "class") add("★ Class library", g);
     else if (g.custom) add("★ Saved in this browser", g);
     else add(g.series, g);
   });
@@ -744,21 +748,23 @@ function renderChips() {
 }
 
 function canDelete(g) {
-  if (!g.custom) return false;
+  if (!g.custom || g.custom.where === "ready") return false;
   if (g.custom.where === "local") return true;
   return lib.db && (lib.isOwner || g.custom.uid === lib.uid);
 }
 function renderFacts() {
   const g = game();
-  const added = g.custom ? (g.custom.where === "class" ? "Class library" : "This browser only") : "Video Game Dialogue Corpus";
+  const added = g.custom ? ({ class: "Class library", ready: "Ready-made addition" }[g.custom.where] || "This browser only") : "Video Game Dialogue Corpus";
   const rows = [["Series", g.series], ["Year", g.year], ["From", added], ["Source type", g.sourceType], ["Completeness", g.completeness], ["Dialogue choices", g.choices], [g.custom ? "Added" : "Corpus folder", g.custom ? (g.custom.addedAt ? new Date(g.custom.addedAt).toLocaleDateString() : "") : g.id]];
   document.getElementById("facts").innerHTML = rows.filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") +
     (g.source && /^https?:/.test(g.source) ? `<dt>Script source</dt><dd><a href="${esc(g.source)}" target="_blank" rel="noopener">link</a></dd>` : (g.source && g.custom ? `<dt>Script source</dt><dd>${esc(g.source)}</dd>` : "")) +
-    (g.custom && g.custom.notes ? `<dt>Notes</dt><dd>${esc(g.custom.notes)}</dd>` : "");
+    (g.custom && g.custom.notes ? `<dt>Notes</dt><dd>${esc(g.custom.notes)}</dd>` : "") +
+    (g.custom && g.custom.rights ? `<dt>Rights</dt><dd>${esc(g.custom.rights)}</dd>` : "");
   const warns = [];
   if (g.stub) warns.push("Loading this game from the class library…");
   if (g.completeness === "sample") warns.push("This script is only a sample of the game's dialogue.");
-  if (g.custom && !g.stub) warns.push("Added by a class member. Check the source and the gender coding before relying on it.");
+  if (g.custom && g.custom.where === "ready") warns.push("Gender tags for this game were added by hand for this tool, not by the corpus authors. Check them before relying on them. Untagged speakers (objects, documents, minor characters) count as Other.");
+  else if (g.custom && !g.stub) warns.push("Added by a class member. Check the source and the gender coding before relying on it.");
   if (!g.custom && !g.hasFeatures) warns.push("No precomputed pronoun or keyword counts for this game. Load its full script for language analysis.");
   if (titleCount[g.title] > 1 && !g.custom) warns.push("The corpus has more than one script for this game from different sources. Counts can differ between versions.");
   document.getElementById("sourceWarn").innerHTML = warns.map(w => `<div class="warnbox">${w}</div>`).join("") +
@@ -821,7 +827,7 @@ function renderOverview() {
 
   document.getElementById("pane-overview").innerHTML = `
     <div class="section">
-      <div><div class="eyebrow">${esc(g.series)}${g.year ? " · " + g.year : ""}${g.custom ? " · added by class" : ""}</div><h2 style="font-size:1.6rem">${esc(g.label)}</h2></div>
+      <div><div class="eyebrow">${esc(g.series)}${g.year ? " · " + g.year : ""}${g.custom ? (g.custom.where === "ready" ? " · ready-made addition" : " · added by class") : ""}</div><h2 style="font-size:1.6rem">${esc(g.label)}</h2></div>
       <div class="tiles">
         <div class="tile"><div class="v">${fmt(totWords)}</div><div class="k">words of dialogue shown</div></div>
         <div class="tile"><div class="v">${fmt(chars.length)}</div><div class="k">speaking characters shown</div></div>
@@ -1136,7 +1142,7 @@ function scriptFromLines(lines, g) {
   lines.forEach(([spk0, text]) => {
     const spk = mapSpeaker(smap, spk0);
     if (!spk) return;
-    const rec = byChar[spk] || (byChar[spk] = { g: gmap[spk] || "Other", coded: !!gmap[spk], lines: [], counts: {}, words: 0, text: "" });
+    const rec = byChar[spk] || (byChar[spk] = { g: gmap[spk] || "Other", coded: !!gmap[spk] && gmap[spk] !== "Other", lines: [], counts: {}, words: 0, text: "" });
     rec.lines.push(text);
     const toks = tokenize(text);
     rec.words += toks.length;
@@ -1156,7 +1162,7 @@ function renderScript() {
       <div class="section">
         <h3>Load the dialogue for ${esc(g.label)}</h3>
         <p style="max-width:75ch;margin:0">${g.custom
-          ? "Scripts added by the class are stored as counts only. To search the actual lines, load the same script file that was used to add this game. It is read with the same settings and speaker names."
+          ? (g.custom.where === "ready" ? "This game is stored as counts only. To search the actual lines, load the dialogue file it was built from (linked as the script source)." : "Scripts added by the class are stored as counts only. To search the actual lines, load the same script file that was used to add this game. It is read with the same settings and speaker names.")
           : "The corpus does not share game scripts directly. It ships a small program for each game that downloads the script from its public source and converts it into a <code>data.json</code> file."}
           Once loaded, you can search words and phrases, see every line in context, and compare speech style. The file stays in your browser.</p>
       </div>

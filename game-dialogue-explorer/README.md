@@ -2,7 +2,7 @@
 
 A browser tool for studying representation in video game dialogue. Pick a game, filter characters by gender, and compare who talks, how much, and how.
 
-It is built on [The Video Game Dialogue Corpus](https://github.com/seannyD/VideoGameDialogueCorpusPublic) and covers 73 game scripts from it. You can also add your own game scripts.
+It is built on [The Video Game Dialogue Corpus](https://github.com/seannyD/VideoGameDialogueCorpusPublic) and covers 73 game scripts from it. It also includes ready-made additions that are not in the corpus (currently Disco Elysium), and you can add your own game scripts.
 
 ## What it does
 
@@ -21,6 +21,8 @@ Everything runs in the browser. Added games keep only word counts and statistics
 | --- | --- |
 | `index.html` | The tool |
 | `corpus-data.js` | Per-character statistics from the corpus, reformatted for the tool |
+| `ready-made-games.js` | Statistics for the ready-made additions (counts only, no dialogue) |
+| `build_ready_made.py`, `ready-made/` | Rebuild the ready-made additions. Each game has a tag file, such as `ready-made/disco-elysium-tags.csv`, that sets each speaker's gender. Edit it, then run `python3 build_ready_made.py disco=/path/to/output.json` with the [Disco Elysium export](https://huggingface.co/datasets/allura-org/disco-elysium-conversations-raw) |
 | `build_data.py` | Rebuilds `corpus-data.js` from a copy of the corpus repository: `python3 build_data.py /path/to/VideoGameDialogueCorpusPublic` |
 
 ## Publishing on GitHub Pages
@@ -33,7 +35,7 @@ Everything runs in the browser. Added games keep only word counts and statistics
 
 The corpus data is by Seán G. Roberts, Stephanie Rennick and contributors, published as [The Video Game Dialogue Corpus](https://github.com/seannyD/VideoGameDialogueCorpusPublic) ([doi 10.5281/zenodo.16994468](https://doi.org/10.5281/zenodo.16994468)) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-**Changes made to the data:** `corpus-data.js` combines the corpus's per-character statistics (`stats_by_character.csv`) and keyness tables (`results/keyness/`). It merges the corpus's "neutral", "genderless" and "ambiguous" groups into one Neutral category, and leaves out games that have no per-character statistics. This project is not made or endorsed by the corpus authors.
+**Changes made to the data:** `corpus-data.js` combines the corpus's per-character statistics (`stats_by_character.csv`) and keyness tables (`results/keyness/`). It merges the corpus's "neutral", "genderless" and "ambiguous" groups into one Neutral category, and leaves out games that have no per-character statistics. The ready-made additions are not part of the corpus: their gender tags were added for this tool, and speakers without a tag count as Other. This project is not made or endorsed by the corpus authors.
 
 If you use the data, please cite:
 

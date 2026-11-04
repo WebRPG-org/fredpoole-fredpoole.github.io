@@ -495,6 +495,8 @@ function detectFormat(text, fileName) {
   if (first.includes("\t") && !/^[^:\t]{1,60}:/.test(first)) return "table";
   return "colon";
 }
+const ROW_SPEAKER_KEYS = ["speaker", "actor", "character", "talker", "name", "role"];
+const ROW_TEXT_KEYS = ["dialogue", "text", "line", "utterance", "dialog", "content", "subtitle", "message"];
 // Returns {format, lines:[[speaker, text]], headers?, cols?, record?}
 function parseInput(text, fileName, opts) {
   const o = Object.assign({ format: "auto", strip: true, join: true, spkCol: -1, txtCol: -1 }, opts || {});
@@ -512,6 +514,11 @@ function parseInput(text, fileName, opts) {
     }
     const walk = v => {
       if (Array.isArray(v)) { v.forEach(walk); return; }
+      if (v && typeof v === "object") {
+        // A row object such as {"actor": "Kim", "dialogue": "..."}, possibly nested inside conversations.
+        const sk = ROW_SPEAKER_KEYS.find(k => typeof v[k] === "string"), tk = ROW_TEXT_KEYS.find(k => typeof v[k] === "string");
+        if (sk && tk) { const s = cleanSpeaker(v[sk]), t = strip(v[tk]); if (s && t) lines.push([s, t]); return; }
+      }
       if (v && typeof v === "object") for (const k in v) {
         const val = v[k];
         if (!EXCLUDE_KEYS.has(k) && !k.startsWith("_") && typeof val === "string") { const t = val.trim(); if (t) lines.push([k, t]); }

@@ -5,11 +5,12 @@ that sets each speaker's gender. Only word counts and statistics are written out
 never the dialogue text. The counting mirrors the explorer's own importer.
 
 Usage:
-    python3 build_ready_made.py disco=/path/to/output.json
+    python3 build_ready_made.py disco=/path/to/output.json gtav=/path/to/gta-pages/ genshin=/path/to/result.json
 
 Edit a tag file and run this again to change gender tags.
 """
 import csv
+import html
 import json
 import os
 import re
@@ -137,7 +138,127 @@ def disco_elysium(path):
     return build_record("extra/DiscoElysium", meta, lines, read_tags("disco-elysium"))
 
 
-BUILDERS = {"disco": disco_elysium}
+def speaker_name(s):
+    """Drop notes such as "(text message)" or "In Spanish" from a transcript's speaker label."""
+    s = html.unescape(html.unescape(s)).replace(":", " ")
+    s = re.sub(r"\([^)]*\)|\bIn (Spanish|German|French|Italian|Polish|Russian|Hungarian)\b", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+# Spelling variants on Grand Theft Wiki. Michael and Amanda go by Townley in the prologue.
+GTA_ALIASES = {
+    "Lamar Davies": "Lamar Davis", "Lamar Davisp": "Lamar Davis", "Lamar Daivs": "Lamar Davis",
+    "Ron Jakowksi": "Ron Jakowski", "Ron Jakowsi": "Ron Jakowski", "Sssquatch": "Sasquatch",
+    "Michael Townley": "Michael De Santa", "Michael Tonwley": "Michael De Santa", "Amanda Townley": "Amanda De Santa",
+    "Police officer": "Police Officer",
+}
+
+
+def gta_v(folder):
+    """Grand Theft Wiki mission script pages (saved .html), where each line is <p><b>Speaker</b>: text</p>."""
+    lines, pages = [], 0
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith(".html"):
+            continue
+        with open(os.path.join(folder, name), encoding="utf-8") as f:
+            page = f.read()
+        body = page[page.find("mw-parser-output"):]
+        body = body[:body.find("printfooter")]
+        pages += 1
+        for para in re.findall(r"<p>(.*?)</p>", body, re.S):
+            m = re.match(r"\s*<b>([^<]{1,80})</b>\s*(?:\([^)]*\))?\s*:(.*)$", para, re.S)
+            if not m:
+                continue
+            spk = speaker_name(m.group(1))
+            text = html.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))
+            if spk:
+                lines.append((GTA_ALIASES.get(spk, spk), strip(text)))
+    meta = {
+        "title": "Grand Theft Auto V",
+        "series": "Grand Theft Auto",
+        "year": 2013,
+        "source": "https://www.grandtheftwiki.com/Category:Scripts_for_GTA_V",
+        "sourceType": "fan wiki transcripts",
+        "completeness": "partial",
+        "choices": "no",
+        "custom": {
+            "where": "ready",
+            "notes": f"The {pages} mission scripts transcribed on Grand Theft Wiki: mostly side missions (Strangers and Freaks, "
+                     "Paparazzo, Epsilon, Tonya, rampages) plus a few story missions, so the main story is under-represented. "
+                     "Stage directions in brackets were removed. Unnamed and one-off speakers are untagged (Other).",
+            "rights": "Dialogue by Rockstar Games; transcripts by Grand Theft Wiki contributors. Only word counts are stored here.",
+            "importOpts": {"format": "auto"},
+        },
+    }
+    return build_record("extra/GTAV", meta, lines, read_tags("gta-v"))
+
+
+def genshin_impact(path):
+    """genshin-voice result.json: {id: {"language", "speaker", "transcription", ...}}, one entry per voiced line."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    lines = []
+    for row in data.values():
+        spk, text = (row.get("speaker") or "").strip(), row.get("transcription") or ""
+        if row.get("language") != "English(US)" or not spk or spk.startswith("#") or not text:
+            continue
+        text = re.sub(r"<[^>]+>|\{[^}]*\}|#", " ", text)  # color tags and name placeholders
+        lines.append((spk, strip(text)))
+    meta = {
+        "title": "Genshin Impact",
+        "series": "Genshin Impact",
+        "year": 2020,
+        "source": "https://huggingface.co/datasets/simon3000/genshin-voice",
+        "sourceType": "voice-line data",
+        "completeness": "voiced lines only",
+        "choices": "no",
+        "custom": {
+            "where": "ready",
+            "notes": "Every English voiced line in the game up to mid-2026 (story, quests, events, character voice-overs and "
+                     "combat lines), from a community dataset. Unvoiced text is missing, including most of the Traveler's "
+                     "dialogue choices, so the Traveler looks quieter than in play. Hero (Aether) and Heroine (Lumine) are "
+                     "the two versions of the Traveler and mostly say the same lines. Minor speakers are untagged (Other).",
+            "rights": "Dialogue by HoYoverse. Only word counts are stored here.",
+            "importOpts": {"format": "json"},
+        },
+    }
+    return build_record("extra/GenshinImpact", meta, lines, read_tags("genshin-impact"))
+
+
+def rdr2(path):
+    """Game Scripts Wiki full transcript (saved .html), where each line is <b>Speaker:</b> text<br />."""
+    with open(path, encoding="utf-8") as f:
+        page = f.read()
+    lines = []
+    for seg in re.split(r"<br\s*/?>", page):
+        m = re.match(r"\s*<b>([^<]{1,60}?):?\s*</b>\s*:?(.*)$", seg, re.S)
+        if not m:
+            continue
+        spk = speaker_name(m.group(1))
+        text = html.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))
+        if spk and len(spk.split()) <= 5:
+            lines.append((spk, strip(text)))
+    meta = {
+        "title": "Red Dead Redemption 2",
+        "series": "Red Dead Redemption",
+        "year": 2018,
+        "source": "https://game-scripts-wiki.blogspot.com/2022/01/red-dead-redemption-2.html",
+        "sourceType": "fan transcript",
+        "completeness": "main story",
+        "choices": "no",
+        "custom": {
+            "where": "ready",
+            "notes": "A fan transcript of the story missions, prologue to epilogue, from Game Scripts Wiki. Side content, "
+                     "camp chatter and most ambient lines are missing. Stage directions in brackets were removed. "
+                     "Unnamed and one-off speakers are untagged (Other).",
+            "rights": "Dialogue by Rockstar Games; transcript by Game Scripts Wiki. Only word counts are stored here.",
+            "importOpts": {"format": "auto"},
+        },
+    }
+    return build_record("extra/RDR2", meta, lines, read_tags("rdr2"))
+
+
+BUILDERS = {"disco": disco_elysium, "gtav": gta_v, "genshin": genshin_impact, "rdr2": rdr2}
 
 
 def main(args):

@@ -258,7 +258,55 @@ def rdr2(path):
     return build_record("extra/RDR2", meta, lines, read_tags("rdr2"))
 
 
-BUILDERS = {"disco": disco_elysium, "gtav": gta_v, "genshin": genshin_impact, "rdr2": rdr2}
+CP77_ALIASES = {"Takamura": "Takemura", "Takemira": "Takemura", "Talkemuro": "Takemura", "Tokemu": "Takemura",
+                "Alt Cunningham": "Alt", "AIt Cunningham": "Alt", "Cunningham": "Alt", "Jarkie": "Jackie", "JackIe": "Jackie",
+                "Mama Weles": "Mamá Welles", "Conch Fred": "Coach Fred", "Cooch Fred": "Coach Fred",
+                "Milt Nouman": "Milt Nauman", "Mil Nauman": "Milt Nauman", "Mit Nauman": "Milt Nauman",
+                "Snider Murphy": "Spider Murphy", "T-Bud": "T-Bug", "Caselus Ryder": "Cassius Ryder",
+                "Stinis": "Stints", "Sunts": "Stints", "Roxonne": "Roxanne", "Honoko": "Hanako", "Harako": "Hanako",
+                "Johnne": "Johnny", "Karry": "Kerry", "Victor": "Viktor", "Panama": "Panam", "Clatre": "Claire",
+                "Grouple": "Groupie", "Net Watch Agent": "NetWatch Agent", "NCPD officer": "NCPD Officer",
+                "Tyger Claws Boss": "Tyger Claw Boss"}
+
+
+def cyberpunk_2077(path):
+    """Game Scripts Wiki full transcript (saved .html): <font color=..><b>Speaker:</b></font> text<br />."""
+    with open(path, encoding="utf-8") as f:
+        page = f.read()
+    start = page.find("entry-content")
+    body = re.sub(r"</?font[^>]*>", "", page[start:page.find("post-footer", start)])
+    lines = []
+    for seg in re.split(r"<br\s*/?>", body):
+        m = re.match(r"\s*<b>([^<]{1,60}?):?\s*</b>\s*:?(.*)$", seg, re.S)
+        if not m:
+            continue
+        spk = speaker_name(m.group(1))
+        spk = CP77_ALIASES.get(spk, spk)
+        text = html.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))
+        if spk and len(spk.split()) <= 5 and not spk.startswith("["):
+            lines.append((spk, strip(text)))
+    meta = {
+        "title": "Cyberpunk 2077",
+        "series": "Cyberpunk",
+        "year": 2020,
+        "source": "https://game-scripts-wiki.blogspot.com/2020/12/cyberpunk-2077-full-transcript.html",
+        "sourceType": "fan transcript",
+        "completeness": "main story",
+        "choices": "yes",
+        "custom": {
+            "where": "ready",
+            "notes": "A fan transcript of one playthrough of the main story (base game, no Phantom Liberty), from Game Scripts Wiki. "
+                     "Most side jobs, gigs and ambient lines are missing, and other dialogue choices would change V's lines. "
+                     "V's gender is chosen by the player (this playthrough's V is not identified), so V is tagged Neutral. "
+                     "Misspelled speaker names were merged. Unnamed and one-off speakers are untagged (Other).",
+            "rights": "Dialogue by CD PROJEKT RED; transcript by Game Scripts Wiki. Only word counts are stored here.",
+            "importOpts": {"format": "auto"},
+        },
+    }
+    return build_record("extra/Cyberpunk2077", meta, lines, read_tags("cyberpunk-2077"))
+
+
+BUILDERS = {"disco": disco_elysium, "gtav": gta_v, "genshin": genshin_impact, "rdr2": rdr2, "cp77": cyberpunk_2077}
 
 
 def main(args):

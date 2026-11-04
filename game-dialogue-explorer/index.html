@@ -529,6 +529,7 @@ function guessCol(headers, names) {
 function detectFormat(text, fileName) {
   const f = (fileName || "").toLowerCase(), t = text.trimStart();
   if (f.endsWith(".json") || t.startsWith("{") || t.startsWith("[")) return "json";
+  if (f.endsWith(".html") || f.endsWith(".htm") || /^<(!doctype html|html)/i.test(t)) return "html";
   if (f.endsWith(".csv") || f.endsWith(".tsv")) return "table";
   const first = t.split(/\r?\n/, 1)[0] || "";
   if (first.includes("\t") && !/^[^:\t]{1,60}:/.test(first)) return "table";
@@ -574,6 +575,18 @@ function parseInput(text, fileName, opts) {
     const rows = parseCSV(text, delim);
     if (!rows.length) return { format, lines };
     return tableLines(rows[0], rows.slice(1), o, strip, "table");
+  }
+  if (format === "html") {
+    // A saved transcript page where each line is <b>Speaker:</b> text, split by <br> or paragraphs.
+    const decode = h => new DOMParser().parseFromString(`<body>${h}`, "text/html").body.textContent;
+    text.replace(/<\/?font[^>]*>/gi, "").split(/<br\s*\/?>|<\/?p[^>]*>/i).forEach(seg => {
+      const m = seg.match(/^\s*<b>([^<]{1,80}?):?\s*<\/b>\s*(?:\([^)]*\))?\s*:?([\s\S]*)$/i);
+      if (!m) return;
+      const spk = cleanSpeaker(decode(m[1]).replace(/\([^)]*\)|\bIn (Spanish|German|French|Italian|Polish|Russian|Hungarian)\b|:/g, " ").replace(/\s+/g, " "));
+      const t = strip(decode(m[2].replace(/<[^>]+>/g, " ")));
+      if (spk && t && spk.split(" ").length <= 5 && !/^[\[(]/.test(spk)) lines.push([spk, t]);
+    });
+    return { format: "html", lines };
   }
   // "Name: line" transcript
   const re = /^\s*([^:\n]{1,60}?)\s*[:：]\s*(.+)$/;
@@ -1312,6 +1325,88 @@ function topNames(counts, n, byChar) {
     .map(([s, k]) => `<span style="white-space:nowrap">${sw(byChar[s] ? byChar[s].g : "Other")}${esc(s)} <span class="note">${k}</span></span>`).join(", ");
 }
 
+// "Who talks to whom": map, partner list and gender breakdown. T has pairs ("a\u0000b" -> exchanges),
+// partners (name -> {partner: exchanges}) and byChar (name -> {g, words}); talkers is sorted biggest first.
+function talkSectionHTML(note) {
+  return `
+    <div class="section">
+      <div class="section-head"><h3>Who talks to whom</h3><button class="btn small" id="copyTk">Copy pairs as CSV</button></div>
+      <div class="toolbar"><span>Map the</span><select id="nmN">${[10, 15, 20, 30].map(n => `<option ${n === state.nmN ? "selected" : ""}>${n}</option>`).join("")}</select><span>biggest speakers, hiding pairs with fewer than</span>
+        <select id="nmMin">${[1, 3, 5, 10, 20].map(n => `<option ${n === state.nmMin ? "selected" : ""}>${n}</option>`).join("")}</select><span>exchanges</span>
+        <button class="btn small" id="nmSave">Download map (SVG)</button></div>
+      <div id="nmOut"></div>
+      <p class="note">Dot size shows how much a character speaks; line thickness shows how often two characters talk to each other. Hover a character to highlight their conversations, click to see the details below.</p>
+      <div class="toolbar" style="margin-top:12px"><span>Character</span><select id="tkWho"></select></div>
+      <div id="tkOut"></div>
+      <p class="note">An exchange is one change of speaker in the script, for example A speaks and then B answers. This is a rough measure, since it can't see scene breaks or group conversations.${note || ""}</p>
+    </div>`;
+}
+function wireTalk(pane, T, talkers, g) {
+  if (!talkers.includes(state.tkWho)) state.tkWho = talkers.includes(state.selected) ? state.selected : talkers[0] || "";
+  const tkSel = pane.querySelector("#tkWho");
+  tkSel.innerHTML = talkers.slice(0, 200).map(n => `<option ${n === state.tkWho ? "selected" : ""}>${esc(n)}</option>`).join("");
+  const runTk = () => {
+    const out = document.getElementById("tkOut"), p = T.partners[state.tkWho];
+    if (!p) { out.innerHTML = `<div class="empty">No exchanges found for the characters shown.</div>`; return; }
+    const list = Object.entries(p).filter(([n]) => state.genders.has(T.byChar[n].g)).sort((a, b) => b[1] - a[1]);
+    const total = list.reduce((s, [, k]) => s + k, 0);
+    const byG = GENDERS.map(x => ({ g: x, k: list.filter(([n]) => T.byChar[n].g === x).reduce((s, [, k]) => s + k, 0) })).filter(x => x.k);
+    const top = list.slice(0, 15);
+    out.innerHTML = !total ? `<div class="empty">${esc(state.tkWho)} has no exchanges with the characters shown.</div>` : `<div class="two">
+      <div class="section"><h3>${esc(state.tkWho)} talks most with</h3><div class="bars">${top.map(([n, k]) => `<div class="bar-row"><span class="name" title="${esc(n)}">${sw(T.byChar[n].g)} ${esc(n)}</span><span class="track"><span class="fill" style="display:block;width:${k / top[0][1] * 100}%;background:${gcol(T.byChar[n].g)}"></span></span><span class="val">${k}</span></div>`).join("")}</div>
+        <p class="note">${fmt(total)} exchanges with ${list.length} characters${list.length > 15 ? ", top 15 shown" : ""}.</p></div>
+      <div class="section"><h3>Exchanges by partner's gender</h3><div class="bars">${byG.map(x => `<div class="bar-row"><span class="name">${sw(x.g)} ${x.g}</span><span class="track"><span class="fill" style="display:block;width:${x.k / total * 100}%;background:${gcol(x.g)}"></span></span><span class="val">${pct(x.k / total)} (${x.k})</span></div>`).join("")}</div></div>
+    </div>`;
+  };
+  tkSel.addEventListener("change", e => { state.tkWho = e.target.value; runTk(); });
+  const runNm = () => {
+    const out = document.getElementById("nmOut");
+    const names = talkers.slice(0, state.nmN);
+    if (names.length < 2) { out.innerHTML = `<div class="empty">Not enough characters to map.</div>`; return; }
+    out.innerHTML = networkSVG(T, T, names, state.nmMin);
+    const svg = out.querySelector("svg");
+    svg.querySelectorAll("g.node").forEach(nd => {
+      const n = nd.dataset.n;
+      nd.addEventListener("mouseenter", () => {
+        svg.classList.add("focus"); nd.classList.add("hi");
+        svg.querySelectorAll("line").forEach(l => { if (l.dataset.a === n || l.dataset.b === n) { l.classList.add("hi"); svg.querySelector(`g.node[data-n="${CSS.escape(l.dataset.a === n ? l.dataset.b : l.dataset.a)}"]`).classList.add("hi"); } });
+      });
+      nd.addEventListener("mouseleave", () => { svg.classList.remove("focus"); svg.querySelectorAll(".hi").forEach(x => x.classList.remove("hi")); });
+      nd.addEventListener("click", () => { state.tkWho = n; tkSel.value = n; runTk(); tkSel.scrollIntoView({ block: "start", behavior: "smooth" }); });
+    });
+  };
+  pane.querySelector("#nmN").addEventListener("change", e => { state.nmN = +e.target.value; runNm(); });
+  pane.querySelector("#nmMin").addEventListener("change", e => { state.nmMin = +e.target.value; runNm(); });
+  pane.querySelector("#nmSave").addEventListener("click", () => {
+    const svg = document.querySelector("#nmOut svg"); if (!svg) return;
+    const cs = getComputedStyle(document.documentElement), v = name => cs.getPropertyValue(name).trim();
+    let src = svg.outerHTML.replace(/var\((--[\w-]+)\)/g, (m, name) => v(name) || m)
+      .replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" style="background:${v("--panel")};font-family:sans-serif" `)
+      .replace(/<line /g, `<line stroke="${v("--muted")}" stroke-linecap="round" `)
+      .replace(/<text /g, `<text font-size="12" fill="${v("--ink")}" stroke="${v("--panel")}" stroke-width="4" paint-order="stroke" stroke-linejoin="round" `);
+    const filename = slug(g.title) + "-conversation-map.svg";
+    if (lib.downloads) { lib.downloads.save({ filename, data: src }).catch(e => { if (e && e.code !== "declined") toast("Could not save the file"); }); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([src], { type: "image/svg+xml" }));
+    a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+  runNm();
+  pane.querySelector("#copyTk").addEventListener("click", () => {
+    const rows = Object.entries(T.pairs).map(([k, n]) => [...k.split("\u0000"), n]).sort((a, b) => b[2] - a[2]);
+    copyText(toCSV([["character A", "gender A", "character B", "gender B", "exchanges"], ...rows.map(([a, b, n]) => [a, T.byChar[a].g, b, T.byChar[b].g, n])]), "Conversation pairs");
+  });
+  runTk();
+}
+function readyLoadText(g) {
+  const src = `<a href="${esc(g.source)}" target="_blank" rel="noopener">script source</a>`;
+  const lead = "This game is stored as counts only. To search the actual lines, load its script.";
+  if (g.scriptUrl) return `${lead} Click <b>Load the script</b>: it comes straight from the ${src} into your browser.`;
+  if (g.scriptHow === "save-page") return `${lead} Open the ${src}, save the page (Cmd+S on a Mac, Ctrl+S on Windows; "Web Page, HTML only" is enough), then drop the saved file below.`;
+  if (g.scriptHow === "many-pages") return `This game's script is spread over many wiki pages (${src}), so it can't be loaded here in one go. The conversation map below works without it.`;
+  if (g.scriptHow === "too-big") return `This game's dialogue comes from a voice-line dataset (${src}) that is too big to load in a browser. Its word counts work in every other tab.`;
+  return `${lead} Load the dialogue file it was built from (the ${src}).`;
+}
 function renderScript() {
   const g = game(), pane = document.getElementById("pane-script");
   const sc = state.scripts[g.id];
@@ -1321,14 +1416,14 @@ function renderScript() {
       <div class="section">
         <h3>Load the dialogue for ${esc(g.label)}</h3>
         <p style="max-width:75ch;margin:0">${g.custom
-          ? (g.custom.where === "ready" ? "This game is stored as counts only. To search the actual lines, load the dialogue file it was built from (linked as the script source)." : "Scripts added by the class are stored as counts only. To search the actual lines, load the same script file that was used to add this game. It is read with the same settings and speaker names.")
+          ? (g.custom.where === "ready" ? readyLoadText(g) : "Scripts added by the class are stored as counts only. To search the actual lines, load the same script file that was used to add this game. It is read with the same settings and speaker names.")
           : "The corpus does not share game scripts directly. It ships a small program for each game that downloads the script from its public source and converts it into a <code>data.json</code> file."}
           Once loaded, you can search words and phrases, see every line in context, and compare speech style. The file stays in your browser.</p>
       </div>
       <div class="drop" id="drop">
-        <strong>Drop the script file here</strong>
-        <span class="note">${g.custom ? ".txt, .csv, .tsv or .json" : "data.json"}</span>
-        <label class="btn primary" style="display:inline-block;cursor:pointer">Choose file<input type="file" id="fileIn" accept=".json,.txt,.csv,.tsv,application/json,text/plain,text/csv" hidden></label>
+        ${g.scriptUrl ? `<button class="btn primary" id="fetchScript">Load the script</button><span class="note">or drop a saved copy here</span>` : `<strong>Drop the script file here</strong>`}
+        <span class="note">${g.scriptUrl ? `about ${g.scriptMB} MB, downloaded from ${esc(new URL(g.scriptUrl).hostname)} straight into your browser` : g.custom ? ".txt, .csv, .tsv, .json or a saved web page (.html)" : "data.json"}</span>
+        <label class="btn${g.scriptUrl ? "" : " primary"}" style="display:inline-block;cursor:pointer">Choose file<input type="file" id="fileIn" accept=".json,.txt,.csv,.tsv,.html,.htm,application/json,text/plain,text/csv,text/html" hidden></label>
         <span class="note" id="loadMsg"></span>
       </div>
       ${g.custom ? "" : `<div class="section">
@@ -1343,17 +1438,14 @@ python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
           <li>Load <code>VideoGameDialogueCorpusPublic/data/${esc(g.id)}/data.json</code> above.</li>
         </ol>
         <p class="note">Scrapers fetch from fan sites and wikis and can take minutes to hours. Some sources may have moved since the corpus was built.</p>
-      </div>`}`;
+      </div>`}
+      ${g.talk ? talkSectionHTML(" These counts were stored when the game was added, so the map works without loading the script.") : ""}`;
     const inp = pane.querySelector("#fileIn"), drop = pane.querySelector("#drop");
-    const handle = file => {
-      const msg = pane.querySelector("#loadMsg");
-      if (!file) return;
-      msg.textContent = `Reading ${file.name}…`;
-      const r = new FileReader();
-      r.onload = () => {
+    const msg = pane.querySelector("#loadMsg");
+    const useText = (text, name) => {
         try {
           const opts = g.custom ? g.custom.importOpts : { format: "json" };
-          const parsed = parseInput(r.result, file.name, opts);
+          const parsed = parseInput(text, name, opts);
           if (!parsed.lines.length) throw new Error("no dialogue lines found");
           const s = scriptFromLines(parsed.lines, g);
           if (g.custom) {
@@ -1363,9 +1455,37 @@ python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
           }
           state.scripts[g.id] = s; renderScript(); renderDetail();
         } catch (e) { msg.textContent = `Could not use that file: ${e.message}.`; }
-      };
+    };
+    const handle = file => {
+      if (!file) return;
+      msg.textContent = `Reading ${file.name}…`;
+      const r = new FileReader();
+      r.onload = () => useText(r.result, file.name);
       r.readAsText(file);
     };
+    const fetchBtn = pane.querySelector("#fetchScript");
+    if (fetchBtn) fetchBtn.addEventListener("click", async () => {
+      fetchBtn.disabled = true; msg.textContent = "Downloading the script…";
+      try {
+        const r = await fetch(g.scriptUrl);
+        if (!r.ok) throw new Error(`the source answered ${r.status}`);
+        msg.textContent = "Reading the script…";
+        useText(await r.text(), g.scriptUrl.split("/").pop());
+      } catch (e) {
+        fetchBtn.disabled = false;
+        msg.innerHTML = `Could not download the script (${esc(e.message)}). Download it from <a href="${esc(g.scriptUrl)}" target="_blank" rel="noopener">its source</a> and drop the file here instead.`;
+      }
+    });
+    if (g.talk) {
+      const byChar = {}, pairs = {}, partners = {};
+      g.chars.forEach(c => { byChar[c.n] = { g: c.g, words: c.s[1] }; });
+      g.talk.forEach(([a, b, n]) => {
+        if (!byChar[a] || !byChar[b]) return;
+        pairs[[a, b].sort().join("\u0000")] = n;
+        [[a, b], [b, a]].forEach(([x, y]) => { (partners[x] = partners[x] || {})[y] = n; });
+      });
+      wireTalk(pane, { pairs, partners, byChar }, g.chars.filter(c => state.genders.has(c.g) && partners[c.n]).sort((a, b) => b.s[1] - a.s[1]).map(c => c.n), g);
+    }
     inp.addEventListener("change", () => handle(inp.files[0]));
     drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
     drop.addEventListener("dragleave", () => drop.classList.remove("over"));
@@ -1422,17 +1542,7 @@ python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
       <p class="note">Sentences are matched ignoring capitals and punctuation. "Said to" is a guess from the script order: the character who spoke just before, or just after if nobody did. Scene changes are not marked in most scripts, so some guesses will be wrong. Check the lines in context with the search above.</p>
     </div>
 
-    <div class="section">
-      <div class="section-head"><h3>Who talks to whom</h3><button class="btn small" id="copyTk">Copy pairs as CSV</button></div>
-      <div class="toolbar"><span>Map the</span><select id="nmN">${[10, 15, 20, 30].map(n => `<option ${n === state.nmN ? "selected" : ""}>${n}</option>`).join("")}</select><span>biggest speakers, hiding pairs with fewer than</span>
-        <select id="nmMin">${[1, 3, 5, 10, 20].map(n => `<option ${n === state.nmMin ? "selected" : ""}>${n}</option>`).join("")}</select><span>exchanges</span>
-        <button class="btn small" id="nmSave">Download map (SVG)</button></div>
-      <div id="nmOut"></div>
-      <p class="note">Dot size shows how much a character speaks; line thickness shows how often two characters talk to each other. Hover a character to highlight their conversations, click to see the details below.</p>
-      <div class="toolbar" style="margin-top:12px"><span>Character</span><select id="tkWho"></select></div>
-      <div id="tkOut"></div>
-      <p class="note">An exchange is one change of speaker in the script, for example A speaks and then B answers. This is a rough measure, since it can't see scene breaks or group conversations.</p>
-    </div>
+${talkSectionHTML()}
 
     <div class="section">
       <div class="section-head"><h3>Speech style by gender</h3><span class="note">per 1,000 words · hover a column for the words counted</span></div>
@@ -1529,62 +1639,7 @@ python3 parseRawData.py ../data/${esc(g.id)}</pre></li>
     ...csRows.map(a => [a.shown, a.n, Object.entries(a.by).sort((x, y) => y[1] - x[1]).map(([s, k]) => `${s} (${k})`).join("; "), Object.entries(a.to).sort((x, y) => y[1] - x[1]).map(([s, k]) => `${s} (${k})`).join("; ")])]), "Common sentences"));
   runCs();
 
-  const talkers = entries.filter(([n]) => talk.partners[n]).sort((a, b) => b[1].words - a[1].words).map(([n]) => n);
-  if (!talkers.includes(state.tkWho)) state.tkWho = talkers.includes(state.selected) ? state.selected : talkers[0] || "";
-  const tkSel = pane.querySelector("#tkWho");
-  tkSel.innerHTML = talkers.slice(0, 200).map(n => `<option ${n === state.tkWho ? "selected" : ""}>${esc(n)}</option>`).join("");
-  const runTk = () => {
-    const out = document.getElementById("tkOut"), p = talk.partners[state.tkWho];
-    if (!p) { out.innerHTML = `<div class="empty">No exchanges found for the characters shown.</div>`; return; }
-    const list = Object.entries(p).filter(([n]) => state.genders.has(sc.byChar[n].g)).sort((a, b) => b[1] - a[1]);
-    const total = list.reduce((s, [, k]) => s + k, 0);
-    const byG = GENDERS.map(x => ({ g: x, k: list.filter(([n]) => sc.byChar[n].g === x).reduce((s, [, k]) => s + k, 0) })).filter(x => x.k);
-    const top = list.slice(0, 15);
-    out.innerHTML = !total ? `<div class="empty">${esc(state.tkWho)} has no exchanges with the characters shown.</div>` : `<div class="two">
-      <div class="section"><h3>${esc(state.tkWho)} talks most with</h3><div class="bars">${top.map(([n, k]) => `<div class="bar-row"><span class="name" title="${esc(n)}">${sw(sc.byChar[n].g)} ${esc(n)}</span><span class="track"><span class="fill" style="display:block;width:${k / top[0][1] * 100}%;background:${gcol(sc.byChar[n].g)}"></span></span><span class="val">${k}</span></div>`).join("")}</div>
-        <p class="note">${fmt(total)} exchanges with ${list.length} characters${list.length > 15 ? ", top 15 shown" : ""}.</p></div>
-      <div class="section"><h3>Exchanges by partner's gender</h3><div class="bars">${byG.map(x => `<div class="bar-row"><span class="name">${sw(x.g)} ${x.g}</span><span class="track"><span class="fill" style="display:block;width:${x.k / total * 100}%;background:${gcol(x.g)}"></span></span><span class="val">${pct(x.k / total)} (${x.k})</span></div>`).join("")}</div></div>
-    </div>`;
-  };
-  tkSel.addEventListener("change", e => { state.tkWho = e.target.value; runTk(); });
-  const runNm = () => {
-    const out = document.getElementById("nmOut");
-    const names = talkers.slice(0, state.nmN);
-    if (names.length < 2) { out.innerHTML = `<div class="empty">Not enough characters to map.</div>`; return; }
-    out.innerHTML = networkSVG(sc, talk, names, state.nmMin);
-    const svg = out.querySelector("svg");
-    svg.querySelectorAll("g.node").forEach(nd => {
-      const n = nd.dataset.n;
-      nd.addEventListener("mouseenter", () => {
-        svg.classList.add("focus"); nd.classList.add("hi");
-        svg.querySelectorAll("line").forEach(l => { if (l.dataset.a === n || l.dataset.b === n) { l.classList.add("hi"); svg.querySelector(`g.node[data-n="${CSS.escape(l.dataset.a === n ? l.dataset.b : l.dataset.a)}"]`).classList.add("hi"); } });
-      });
-      nd.addEventListener("mouseleave", () => { svg.classList.remove("focus"); svg.querySelectorAll(".hi").forEach(x => x.classList.remove("hi")); });
-      nd.addEventListener("click", () => { state.tkWho = n; tkSel.value = n; runTk(); tkSel.scrollIntoView({ block: "start", behavior: "smooth" }); });
-    });
-  };
-  pane.querySelector("#nmN").addEventListener("change", e => { state.nmN = +e.target.value; runNm(); });
-  pane.querySelector("#nmMin").addEventListener("change", e => { state.nmMin = +e.target.value; runNm(); });
-  pane.querySelector("#nmSave").addEventListener("click", () => {
-    const svg = document.querySelector("#nmOut svg"); if (!svg) return;
-    const cs = getComputedStyle(document.documentElement), v = name => cs.getPropertyValue(name).trim();
-    let src = svg.outerHTML.replace(/var\((--[\w-]+)\)/g, (m, name) => v(name) || m)
-      .replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" style="background:${v("--panel")};font-family:sans-serif" `)
-      .replace(/<line /g, `<line stroke="${v("--muted")}" stroke-linecap="round" `)
-      .replace(/<text /g, `<text font-size="12" fill="${v("--ink")}" stroke="${v("--panel")}" stroke-width="4" paint-order="stroke" stroke-linejoin="round" `);
-    const filename = slug(g.title) + "-conversation-map.svg";
-    if (lib.downloads) { lib.downloads.save({ filename, data: src }).catch(e => { if (e && e.code !== "declined") toast("Could not save the file"); }); return; }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([src], { type: "image/svg+xml" }));
-    a.download = filename; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  });
-  runNm();
-  pane.querySelector("#copyTk").addEventListener("click", () => {
-    const rows = Object.entries(talk.pairs).map(([k, n]) => [...k.split("\u0000"), n]).sort((a, b) => b[2] - a[2]);
-    copyText(toCSV([["character A", "gender A", "character B", "gender B", "exchanges"], ...rows.map(([a, b, n]) => [a, sc.byChar[a].g, b, sc.byChar[b].g, n])]), "Conversation pairs");
-  });
-  runTk();
+  wireTalk(pane, { pairs: talk.pairs, partners: talk.partners, byChar: sc.byChar }, entries.filter(([n]) => talk.partners[n]).sort((a, b) => b[1].words - a[1].words).map(([n]) => n), g);
 
   pane.querySelector("#qGo").addEventListener("click", runSearch);
   pane.querySelector("#q").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });

@@ -97,10 +97,22 @@ def read_tags(name):
     return tags
 
 
-def build_record(game_id, meta, lines, tags):
+def build_record(game_id, meta, lines, tags, talk=True):
+    # Who talks to whom: one exchange per change of speaker; (None, "") marks a break between conversations.
+    pairs, prev = {}, None
+    for spk, text in lines:
+        if spk is None:
+            prev = None
+            continue
+        if not text or not tokenize(text):
+            continue
+        if prev and prev != spk:
+            k = tuple(sorted((prev, spk)))
+            pairs[k] = pairs.get(k, 0) + 1
+        prev = spk
     acc = {}
     for spk, text in lines:
-        if not text:
+        if spk is None or not text:
             continue
         a = acc.setdefault(spk, {"lines": 0, "words": 0, "sent": 0, "syl": 0, "kw": {}, "text": []})
         toks = tokenize(text)
@@ -134,7 +146,11 @@ def build_record(game_id, meta, lines, tags):
         })
     chars.sort(key=lambda c: -c["s"][1])
     pcs = [n for n, t in tags.items() if (t.get("player_character") or "").lower() == "yes"]
-    return dict(meta, id=game_id, pcs=pcs, groups={}, chars=chars)
+    rec = dict(meta, id=game_id, pcs=pcs, groups={}, chars=chars)
+    if talk:
+        kept = {c["n"] for c in chars}
+        rec["talk"] = [[a, b, n] for (a, b), n in sorted(pairs.items(), key=lambda x: -x[1]) if n >= 2 and a in kept and b in kept][:3000]
+    return rec
 
 
 def disco_elysium(path):
@@ -143,6 +159,7 @@ def disco_elysium(path):
         data = json.load(f)
     lines = []
     for conv in data["conversations"]:
+        lines.append((None, ""))
         for row in conv:
             text = row.get("dialogue", "")
             if text.startswith("["):
@@ -168,6 +185,8 @@ def disco_elysium(path):
             "rights": "Dialogue by ZA/UM. Only word counts are stored here.",
             "importOpts": {"format": "json"},
         },
+        "scriptUrl": "https://huggingface.co/datasets/allura-org/disco-elysium-conversations-raw/resolve/main/output.json",
+        "scriptMB": 3.4,
     }
     return build_record("extra/DiscoElysium", meta, lines, read_tags("disco-elysium"))
 
@@ -192,6 +211,7 @@ def gta_v(folder):
     """Grand Theft Wiki mission script pages (saved .html), where each line is <p><b>Speaker</b>: text</p>."""
     lines, pages = [], 0
     for name in sorted(os.listdir(folder)):
+        lines.append((None, ""))
         if not name.endswith(".html"):
             continue
         with open(os.path.join(folder, name), encoding="utf-8") as f:
@@ -222,7 +242,9 @@ def gta_v(folder):
                      "Stage directions in brackets were removed. Unnamed and one-off speakers are untagged (Other).",
             "rights": "Dialogue by Rockstar Games; transcripts by Grand Theft Wiki contributors. Only word counts are stored here.",
             "importOpts": {"format": "auto"},
+            "speakerMap": {k.lower(): v for k, v in GTA_ALIASES.items()},
         },
+        "scriptHow": "many-pages",
     }
     return build_record("extra/GTAV", meta, lines, read_tags("gta-v"))
 
@@ -256,7 +278,8 @@ def genshin_impact(path):
             "importOpts": {"format": "json"},
         },
     }
-    return build_record("extra/GenshinImpact", meta, lines, read_tags("genshin-impact"))
+    # Voice lines are listed by audio file, not by conversation, so their order says nothing about who talks to whom.
+    return build_record("extra/GenshinImpact", dict(meta, scriptHow="too-big"), lines, read_tags("genshin-impact"), talk=False)
 
 
 def rdr2(path):
@@ -288,6 +311,7 @@ def rdr2(path):
             "rights": "Dialogue by Rockstar Games; transcript by Game Scripts Wiki. Only word counts are stored here.",
             "importOpts": {"format": "auto"},
         },
+        "scriptHow": "save-page",
     }
     return build_record("extra/RDR2", meta, lines, read_tags("rdr2"))
 
@@ -335,7 +359,9 @@ def cyberpunk_2077(path):
                      "Misspelled speaker names were merged. Unnamed and one-off speakers are untagged (Other).",
             "rights": "Dialogue by CD PROJEKT RED; transcript by Game Scripts Wiki. Only word counts are stored here.",
             "importOpts": {"format": "auto"},
+            "speakerMap": {k.lower(): v for k, v in CP77_ALIASES.items()},
         },
+        "scriptHow": "save-page",
     }
     return build_record("extra/Cyberpunk2077", meta, lines, read_tags("cyberpunk-2077"))
 
@@ -405,6 +431,7 @@ def where_winds_meet(path):
         m = re.search(r"\|\s*性别\s*=\s*([男女公母])", w)
         if m:
             wiki_gender[p["title"]] = m.group(1)
+        lines.append((None, ""))
         for body in wiki_templates(w, "对话"):
             parts = wiki_params(body)
             if len(parts) < 2:
@@ -420,7 +447,8 @@ def where_winds_meet(path):
     tags = read_tags("where-winds-meet") if os.path.exists(tag_path) else {}
     counts = {}
     for spk, _ in lines:
-        counts[spk] = counts.get(spk, 0) + 1
+        if spk is not None:
+            counts[spk] = counts.get(spk, 0) + 1
     for spk, n in sorted(counts.items(), key=lambda x: -x[1]):
         if spk in tags:
             continue
@@ -467,6 +495,8 @@ def where_winds_meet(path):
             "rights": "Dialogue by Everstone Studio / NetEase. Transcriptions from the 燕云十六声 Huiji wiki (CC BY-NC-SA). Only word counts are stored here.",
             "importOpts": {"format": "json"},
         },
+        "scriptUrl": "https://raw.githubusercontent.com/anonymous99-Rise/yanyun-guide/main/content/huiji/pages.json",
+        "scriptMB": 13.5,
     }
     return build_record("extra/WhereWindsMeet", meta, lines, tags)
 
